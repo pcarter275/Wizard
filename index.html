@@ -47,7 +47,9 @@ body{background:radial-gradient(120% 78% at 50% 34%,#3A2545 0%,#2A1B33 46%,#170D
 .seat.exact .pip.won{background:var(--brass);border-color:var(--brass)}
 .seat.exact .who{color:var(--brass)}
 .seat.bust .who{color:var(--crimson)}
-.bidmark{position:absolute;top:6px;right:7px;font:400 11px/1 var(--num);color:var(--brass)}
+.bidmark{position:absolute;top:5px;right:7px;font:400 15px/1 var(--num);color:var(--brass);display:flex;align-items:baseline;gap:3px}
+.bidmark span{font-size:8px;letter-spacing:.14em;text-transform:uppercase;color:rgba(212,169,60,.7)}
+.bidmark.pend{color:rgba(244,236,216,.3);font-size:13px}
 .dealerdot{position:absolute;bottom:6px;right:7px;font:400 8px/1 var(--num);letter-spacing:.1em;color:rgba(244,236,216,.45)}
 .waitdot{position:absolute;top:7px;right:8px;width:6px;height:6px;border-radius:50%;background:var(--brass);
   animation:blink 1s steps(2) infinite}
@@ -791,14 +793,17 @@ function renderRail(v, mySeat, presence) {
       for (k = 0; k < empty; k++) pips += '<i class="pip"></i>';
     }
     var waiting = (v.phase === 'bidding' || v.phase === 'playing') && i === v.turn;
+    var badge = '';
+    if (bid !== null) badge = '<div class="bidmark"><span>bid</span>' + bid + '</div>';
+    else if (v.phase === 'bidding') badge = '<div class="bidmark pend">·</div>';
     d.innerHTML = '<div class="who">' + esc(p.name) + (i === mySeat ? ' ·' : '') + '</div>' +
-      '<div class="tot">' + v.scores[i] + '</div><div class="pips">' + pips + '</div>' +
-      (bid !== null ? '<div class="bidmark">' + bid + '</div>' : '') +
+      '<div class="tot">' + v.scores[i] + '</div><div class="pips">' + pips + '</div>' + badge +
       (i === v.dealer ? '<div class="dealerdot">DEALS</div>' : '') +
       (waiting ? '<div class="waitdot"></div>' : '');
     el.appendChild(d);
   });
 }
+var prevTrickIds = [];
 function renderTrick(v) {
   var el = $('trick'); el.innerHTML = '';
   var cards = v.trick.length ? v.trick : (v.lastTrick ? v.lastTrick.cards : []);
@@ -806,10 +811,13 @@ function renderTrick(v) {
   cards.forEach(function (pl) {
     var wrap = document.createElement('div');
     wrap.className = 'played' + (pl.seat === winnerSeat ? ' winner' : '');
+    // only the freshly-played card animates in; cards already on the table stay put
+    if (prevTrickIds.indexOf(pl.card.id) >= 0) wrap.style.animation = 'none';
     var lbl = document.createElement('div'); lbl.className = 'lbl'; lbl.textContent = v.seats[pl.seat].name;
     wrap.appendChild(cardEl(pl.card)); wrap.appendChild(lbl);
     el.appendChild(wrap);
   });
+  prevTrickIds = cards.map(function (p) { return p.card.id; });
 }
 function sortHand(hand, trump) {
   var order = { wizard: 0, suit: 1, jester: 2 };
@@ -1023,21 +1031,54 @@ function App_registerOnline() {
   App.online = {
     update: function (room, myHand, presence, myUid) {
       online.room = room; online.myHand = myHand || []; online.presence = presence || {}; online.myUid = myUid;
-      if (!room || room.status === 'lobby') return; // lobby handled separately
+      if (!room || room.status === 'lobby') { lastRenderSig = null; lastBids = null; prevTrickIds = []; return; }
       renderOnline();
     },
     net: function (net) { online.net = net; }
   };
 }
+var lastRenderSig = null, lastBids = null;
+function roomSignature(room, myHand) {
+  return [room.rev, room.status, room.phase, room.turn, room.dealer, room.trump, room.round,
+    room.bids.join(','), room.tricksWon.join(','), room.scores.join(','),
+    room.trick.map(function (t) { return t.seat + t.card.id; }).join(','),
+    room.lastTrick ? room.lastTrick.winner + room.lastTrick.cards.map(function (c) { return c.card.id; }).join('') : '',
+    (myHand || []).map(function (c) { return c.id; }).join(',')
+  ].join('|');
+}
+function applyPresence(pres, seats) {
+  var rail = $('rail').children;
+  seats.forEach(function (s, i) {
+    var el = rail[i]; if (!el) return;
+    if (pres[s.uid] === false) el.classList.add('off'); else el.classList.remove('off');
+  });
+}
+function announceBids(room, mySeat) {
+  if (lastBids && room.phase === 'bidding') {
+    for (var i = 0; i < room.bids.length; i++) {
+      if (lastBids[i] === null && room.bids[i] !== null && i !== mySeat) {
+        toast(room.seats[i].name + ' bids ' + room.bids[i]);
+      }
+    }
+  }
+  lastBids = room.bids.slice();
+}
 function renderOnline() {
   var room = online.room; if (!room) return;
   hideSheetsForTable();
-  var v = Host.assemble(room, keyById(room.seats, online.myHand, online.myUid));
   var mySeat = room.seats.findIndex(function (s) { return s.uid === online.myUid; });
   var isHost = room.hostUid === online.myUid;
   var pres = {};
   room.seats.forEach(function (s) { pres[s.uid] = online.presence[s.uid] !== false; });
 
+  // Only the presence heartbeat changed? Just update the dots — don't rebuild
+  // the board (that was the flashing).
+  var sig = roomSignature(room, online.myHand);
+  if (sig === lastRenderSig) { applyPresence(pres, room.seats); return; }
+  announceBids(room, mySeat);
+  lastRenderSig = sig;
+
+  var v = Host.assemble(room, keyById(room.seats, online.myHand, online.myUid));
   paint(v, {
     mySeat: mySeat, myHand: online.myHand, presence: pres,
     myTurn: v.phase === 'playing' && v.turn === mySeat,
@@ -1049,6 +1090,7 @@ function renderOnline() {
     onPlay: function (c) { online.net.submit({ type: 'play', value: c.id }); },
     onTrump: function (k) { online.net.submit({ type: 'trump', value: k }); $('trumpPanel').hidden = true; }
   });
+  applyPresence(pres, room.seats);
 }
 function keyById(seats, myHand, myUid) { var m = {}; seats.forEach(function (s) { m[s.uid] = s.uid === myUid ? myHand : []; }); return m; }
 function hideSheetsForTable() {
