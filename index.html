@@ -1,0 +1,1572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Wizard — play live</title>
+<style>
+:root{
+  --table:#2A1B33; --table-deep:#170D1E; --felt:#3A2545;
+  --parch:#F4ECD8; --parch-2:#E4D8BC;
+  --brass:#D4A93C; --crimson:#B3262F; --ink:#191320;
+  --violet:#7B5EA7; --teal:#2E8F7D;
+  --line:rgba(244,236,216,.16);
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+  --num:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --cw:62px; --ch:88px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--table-deep);color:var(--parch);
+  font-family:var(--serif);overscroll-behavior:none;-webkit-user-select:none;user-select:none}
+body{background:radial-gradient(120% 78% at 50% 34%,#3A2545 0%,#2A1B33 46%,#170D1E 100%)}
+#app{position:fixed;inset:0;display:flex;flex-direction:column;
+  padding:calc(env(safe-area-inset-top) + 8px) 10px calc(env(safe-area-inset-bottom) + 6px)}
+
+#topbar{display:flex;align-items:center;gap:10px;flex:none}
+.meta{font:400 11px/1 var(--num);letter-spacing:.18em;text-transform:uppercase;color:rgba(244,236,216,.62)}
+#trump{margin-left:auto;display:flex;align-items:center;gap:8px;border:1px solid var(--line);
+  border-radius:2px;padding:5px 11px;font:400 11px/1 var(--num);letter-spacing:.14em;
+  text-transform:uppercase;color:rgba(244,236,216,.6)}
+#trump b{font-family:var(--serif);font-size:31px;line-height:.8;margin-top:-1px}
+.menuBtn{background:none;border:1px solid var(--line);color:rgba(244,236,216,.72);border-radius:2px;
+  font:400 10px/1 var(--num);letter-spacing:.18em;padding:7px 9px;cursor:pointer}
+
+#rail{display:flex;gap:6px;margin:9px 0 4px;flex:none}
+.seat{flex:1;min-width:0;padding:7px 7px 8px;border-radius:3px;border:1px solid var(--line);
+  background:rgba(244,236,216,.03);transition:border-color .25s,background .25s,box-shadow .25s;position:relative}
+.seat.turn{border-color:var(--brass);background:rgba(212,169,60,.10);box-shadow:0 0 0 1px rgba(212,169,60,.25)}
+.seat.me .who{text-decoration:underline;text-underline-offset:2px}
+.seat.off{opacity:.5}
+.seat .who{font-size:13px;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  font-variant:small-caps;letter-spacing:.05em}
+.seat .tot{font:400 10px/1 var(--num);color:rgba(244,236,216,.5);margin-top:2px}
+.pips{display:flex;flex-wrap:wrap;gap:3px;margin-top:6px;min-height:8px}
+.pip{width:7px;height:7px;border-radius:50%;border:1px solid rgba(244,236,216,.42)}
+.pip.won{background:var(--parch);border-color:var(--parch)}
+.pip.over{background:var(--crimson);border-color:var(--crimson)}
+.seat.exact .pip.won{background:var(--brass);border-color:var(--brass)}
+.seat.exact .who{color:var(--brass)}
+.seat.bust .who{color:var(--crimson)}
+.bidmark{position:absolute;top:6px;right:7px;font:400 11px/1 var(--num);color:var(--brass)}
+.dealerdot{position:absolute;bottom:6px;right:7px;font:400 8px/1 var(--num);letter-spacing:.1em;color:rgba(244,236,216,.45)}
+.waitdot{position:absolute;top:7px;right:8px;width:6px;height:6px;border-radius:50%;background:var(--brass);
+  animation:blink 1s steps(2) infinite}
+@keyframes blink{50%{opacity:.25}}
+
+#table{flex:1;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;min-height:0}
+#trick{display:flex;gap:6px;align-items:flex-end;justify-content:center;flex-wrap:wrap;max-width:100%}
+.played{display:flex;flex-direction:column;align-items:center;gap:5px;animation:deal .28s cubic-bezier(.2,.9,.3,1.2) both}
+.played .lbl{font:400 9px/1 var(--num);letter-spacing:.12em;text-transform:uppercase;color:rgba(244,236,216,.5)}
+.played.winner .card{box-shadow:0 0 0 2px var(--brass),0 10px 22px rgba(0,0,0,.45)}
+.played.winner .lbl{color:var(--brass)}
+@keyframes deal{from{opacity:0;transform:translateY(-26px) scale(.86) rotate(-4deg)}to{opacity:1;transform:none}}
+#msg{font-size:14px;color:rgba(244,236,216,.66);text-align:center;min-height:19px;font-style:italic;padding:0 12px}
+
+.card{width:var(--cw);height:var(--ch);border-radius:5px;position:relative;flex:none;
+  background:linear-gradient(160deg,var(--parch),var(--parch-2));color:var(--ink);
+  box-shadow:0 4px 12px rgba(0,0,0,.4);overflow:hidden;border:1px solid rgba(25,19,32,.25)}
+.card .r{position:absolute;top:3px;left:5px;font:600 15px/1 var(--serif)}
+.card .r.b{top:auto;bottom:3px;left:auto;right:5px;transform:rotate(180deg)}
+.card .mid{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:31px;line-height:1}
+.card.red{color:var(--crimson)}
+.card.wizard{background:linear-gradient(160deg,#7B5EA7,#4A3268);color:#F6EFDF;border-color:#3A2552}
+.card.jester{background:linear-gradient(160deg,#2E8F7D,#1B5A4E);color:#F6EFDF;border-color:#164A40}
+.card.wizard .mid,.card.jester .mid{font-size:15px;flex-direction:column;gap:3px}
+.card svg{display:block}
+.card.back{background:repeating-linear-gradient(45deg,#4A3268 0 6px,#3D2A57 6px 12px);border-color:#2A1B3D}
+
+#handWrap{flex:none;padding-top:6px;min-height:calc(var(--ch) + 20px);display:flex;align-items:flex-end;
+  justify-content:center;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
+#handWrap::-webkit-scrollbar{display:none}
+#hand{display:flex;padding:12px 6px 4px;min-width:min-content}
+#hand .card{cursor:pointer;transition:transform .16s ease,box-shadow .16s ease,filter .16s}
+#hand .card.legal:hover{transform:translateY(-9px)}
+#hand .card.illegal{filter:grayscale(.55) brightness(.72)}
+#hand .card.shake{animation:shake .32s}
+@keyframes shake{25%{transform:translateX(-5px)}50%{transform:translateX(5px)}75%{transform:translateX(-3px)}}
+
+.sheet{position:absolute;inset:0;z-index:30;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;padding:22px 16px;background:radial-gradient(120% 80% at 50% 20%,rgba(58,37,69,.94),rgba(15,8,20,.97))}
+.sheet[hidden]{display:none}
+.sheet .box{width:100%;max-width:420px;max-height:100%;overflow:auto;scrollbar-width:none}
+.sheet .box::-webkit-scrollbar{display:none}
+.eyebrow{font:400 10px/1 var(--num);letter-spacing:.28em;text-transform:uppercase;color:var(--brass);margin:0 0 10px}
+h1{font-size:clamp(52px,17vw,80px);margin:0;line-height:.86;font-weight:400;letter-spacing:-.02em}
+h1 em{font-style:italic;color:var(--brass)}
+h2{font-size:27px;margin:0 0 4px;font-weight:400;letter-spacing:-.01em}
+p.lede{font-size:14px;line-height:1.6;color:rgba(244,236,216,.66);margin:10px 0 18px}
+.field{margin-bottom:14px}
+.field .lab{font:400 10px/1 var(--num);letter-spacing:.2em;text-transform:uppercase;color:rgba(244,236,216,.5);margin-bottom:7px}
+.opts{display:flex;gap:6px;flex-wrap:wrap}
+.opt{flex:1;min-width:60px;padding:10px 6px;border:1px solid var(--line);border-radius:3px;
+  background:rgba(244,236,216,.03);color:inherit;font-family:var(--serif);font-size:15px;cursor:pointer;
+  transition:border-color .15s,background .15s}
+.opt small{display:block;font:400 9px/1.3 var(--num);letter-spacing:.08em;color:rgba(244,236,216,.45);margin-top:3px;text-transform:uppercase}
+.opt[aria-pressed="true"]{border-color:var(--brass);background:rgba(212,169,60,.14);color:var(--brass)}
+.opt[disabled]{opacity:.4;cursor:not-allowed}
+.btn{width:100%;padding:14px;border:none;border-radius:3px;background:var(--brass);color:#241703;
+  font-family:var(--serif);font-size:20px;letter-spacing:.01em;cursor:pointer;box-shadow:0 4px 0 #8E6D18}
+.btn:active{transform:translateY(3px);box-shadow:0 1px 0 #8E6D18}
+.btn[disabled]{opacity:.45;cursor:not-allowed;box-shadow:0 4px 0 #8E6D18}
+.btn.ghost{background:none;color:var(--parch);border:1px solid var(--line);box-shadow:none;font-size:16px}
+.btn.ghost:active{transform:translateY(2px)}
+.btn.google{background:var(--parch);color:#241703;display:flex;align-items:center;justify-content:center;gap:9px}
+.row2{display:flex;gap:8px;margin-top:8px}
+.inp{width:100%;padding:12px 13px;border:1px solid var(--line);border-radius:3px;background:rgba(244,236,216,.05);
+  color:var(--parch);font-family:var(--serif);font-size:17px;outline:none}
+.inp:focus{border-color:var(--brass)}
+.inp.code{font-family:var(--num);letter-spacing:.42em;text-align:center;text-transform:uppercase;font-size:26px;padding-right:0}
+:focus-visible{outline:2px solid var(--brass);outline-offset:3px}
+.err{color:var(--crimson);font:400 12px/1.4 var(--num);margin-top:8px;min-height:14px}
+.hint{font:400 11px/1.5 var(--num);color:rgba(244,236,216,.4);letter-spacing:.03em;margin-top:10px}
+a{color:var(--brass)}
+
+#bidPanel{position:absolute;top:auto;left:0;right:0;bottom:calc(var(--ch) + 30px);display:block;padding:0 12px;background:none;z-index:28}
+#bidPanel[hidden]{display:none}
+#bidPanel .box{background:#241730;border:1px solid var(--line);border-radius:5px;padding:14px;
+  box-shadow:0 16px 44px rgba(0,0,0,.6);margin:0 auto}
+#bidNums{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
+.num{width:46px;height:46px;border-radius:3px;border:1px solid var(--line);background:rgba(244,236,216,.04);
+  color:var(--parch);font:400 19px/1 var(--num);cursor:pointer}
+.num:disabled{opacity:.28;cursor:not-allowed}
+.num:active{background:var(--brass);color:#241703}
+
+table{width:100%;border-collapse:collapse;font-family:var(--num);font-size:12px}
+th{font:400 9px/1 var(--num);letter-spacing:.16em;text-transform:uppercase;color:rgba(244,236,216,.45);text-align:right;padding:0 0 7px;font-weight:400}
+th:first-child,td:first-child{text-align:left;font-family:var(--serif);font-size:14px;font-variant:small-caps;letter-spacing:.04em}
+td{padding:8px 0;border-top:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums}
+tr.hit td{color:var(--brass)}
+tr.miss td{color:rgba(244,236,216,.55)}
+td.delta{width:52px}
+
+#lobbyPlayers{display:flex;flex-direction:column;gap:7px;margin:6px 0 16px}
+.lp{display:flex;align-items:center;gap:9px;padding:10px 12px;border:1px solid var(--line);border-radius:3px;background:rgba(244,236,216,.03)}
+.lp .dot{width:8px;height:8px;border-radius:50%;background:var(--teal);flex:none}
+.lp .dot.off{background:rgba(244,236,216,.28)}
+.lp .nm{font-size:16px;font-variant:small-caps;letter-spacing:.04em}
+.lp .tag{margin-left:auto;font:400 9px/1 var(--num);letter-spacing:.16em;text-transform:uppercase;color:var(--brass)}
+.codebox{text-align:center;margin:2px 0 16px}
+.codebox .c{font-family:var(--num);font-size:40px;letter-spacing:.32em;color:var(--brass);font-weight:400;padding-left:.32em}
+.codebox .cl{font:400 9px/1 var(--num);letter-spacing:.24em;text-transform:uppercase;color:rgba(244,236,216,.45);margin-bottom:4px}
+.copyBtn{margin-top:8px;background:none;border:1px solid var(--line);color:rgba(244,236,216,.7);
+  border-radius:2px;font:400 10px/1 var(--num);letter-spacing:.16em;padding:8px 12px;cursor:pointer;text-transform:uppercase}
+
+#toast{position:absolute;left:50%;bottom:calc(var(--ch) + 42px);transform:translateX(-50%);
+  background:rgba(15,8,20,.92);border:1px solid var(--line);border-radius:3px;padding:9px 14px;font-size:13px;
+  opacity:0;pointer-events:none;transition:opacity .2s;z-index:33;white-space:nowrap;max-width:88vw}
+#toast.show{opacity:1}
+.whoami{position:absolute;top:calc(env(safe-area-inset-top) + 12px);right:12px;display:flex;align-items:center;gap:8px;
+  font:400 11px/1 var(--num);color:rgba(244,236,216,.55);letter-spacing:.05em}
+.whoami button{background:none;border:none;color:var(--brass);font:inherit;cursor:pointer;text-decoration:underline}
+.spin{width:22px;height:22px;border:2px solid var(--line);border-top-color:var(--brass);border-radius:50%;
+  animation:spin .8s linear infinite;margin:14px auto}
+@keyframes spin{to{transform:rotate(360deg)}}
+.tabs{display:flex;gap:0;margin-bottom:16px;border:1px solid var(--line);border-radius:3px;overflow:hidden}
+.tabs button{flex:1;padding:11px;background:none;border:none;color:rgba(244,236,216,.6);font-family:var(--serif);
+  font-size:15px;cursor:pointer;border-right:1px solid var(--line)}
+.tabs button:last-child{border-right:none}
+.tabs button[aria-selected="true"]{background:rgba(212,169,60,.14);color:var(--brass)}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms !important;transition-duration:.01ms !important}}
+@media (max-height:640px){:root{--cw:54px;--ch:77px}}
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="topbar">
+    <div class="meta" id="roundLabel">Wizard</div>
+    <div id="trump"><span>Trump</span><b id="trumpGlyph">—</b></div>
+    <button class="menuBtn" id="menuBtn" type="button">MENU</button>
+  </header>
+
+  <div id="rail"></div>
+
+  <main id="table">
+    <div id="trick"></div>
+    <div id="msg"></div>
+  </main>
+
+  <footer id="handWrap"><div id="hand"></div></footer>
+  <div id="toast"></div>
+
+  <!-- bidding -->
+  <section class="sheet" id="bidPanel" hidden>
+    <div class="box">
+      <h2 id="bidTitle">Your bid</h2>
+      <p class="lede" id="bidHint" style="margin:6px 0 0"></p>
+      <div id="bidNums"></div>
+    </div>
+  </section>
+
+  <!-- trump choice -->
+  <section class="sheet" id="trumpPanel" hidden>
+    <div class="box">
+      <p class="eyebrow">A Wizard turned up</p>
+      <h2>You deal — name the trump</h2>
+      <p class="lede">Your chosen suit outranks the other three this round.</p>
+      <div class="opts" id="trumpOpts"></div>
+    </div>
+  </section>
+
+  <!-- AUTH -->
+  <section class="sheet" id="authSheet" hidden>
+    <div class="box">
+      <p class="eyebrow">Trick-taking · 3–6 players</p>
+      <h1>Wiz<em>a</em>rd</h1>
+      <p class="lede">Sign in to open a table your friends can join with a code, or jump straight into a practice game against the house.</p>
+      <button class="btn google" id="googleBtn" type="button">
+        <svg width="17" height="17" viewBox="0 0 48 48" aria-hidden="true"><path fill="#4285F4" d="M45.1 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h11.8c-.5 2.8-2 5.1-4.4 6.7v5.6h7.1c4.2-3.8 6.6-9.5 6.6-16.3z"/><path fill="#34A853" d="M24 46c6 0 11-2 14.6-5.4l-7.1-5.6c-2 1.3-4.5 2.1-7.5 2.1-5.8 0-10.6-3.9-12.4-9.1H4.3v5.7C7.9 41.1 15.4 46 24 46z"/><path fill="#FBBC05" d="M11.6 27.9c-.5-1.4-.7-2.9-.7-4.4s.3-3 .7-4.4v-5.7H4.3C2.8 16.3 2 20 2 23.5s.8 7.2 2.3 10.1l7.3-5.7z"/><path fill="#EA4335" d="M24 10.7c3.3 0 6.2 1.1 8.5 3.3l6.3-6.3C35 4.1 30 2 24 2 15.4 2 7.9 6.9 4.3 13.9l7.3 5.7c1.8-5.2 6.6-8.9 12.4-8.9z"/></svg>
+        Continue with Google
+      </button>
+      <div class="row2" style="margin-top:14px"><input class="inp" id="guestName" maxlength="16" placeholder="Name for guest play" autocomplete="off"></div>
+      <div class="row2"><button class="btn ghost" id="guestBtn" type="button">Play as guest</button></div>
+      <div class="err" id="authErr"></div>
+      <div class="row2" style="margin-top:18px"><button class="btn ghost" id="practiceOnlyBtn" type="button">Practice vs AI (no sign-in)</button></div>
+    </div>
+  </section>
+
+  <!-- config missing -->
+  <section class="sheet" id="configSheet" hidden>
+    <div class="box">
+      <p class="eyebrow">One-time setup</p>
+      <h2>Connect a Firebase project</h2>
+      <p class="lede">Live play needs a free Firebase backend, since GitHub Pages only serves static files. Paste your project's web config into the top of this file (the <b>FIREBASE_CONFIG</b> block), enable Google + Anonymous sign-in and Firestore, and reload. The README walks through it in about five minutes.</p>
+      <button class="btn" id="cfgPracticeBtn" type="button">Play practice for now</button>
+      <div class="hint">Everything else on this page already works offline against AI.</div>
+    </div>
+  </section>
+
+  <!-- HOME -->
+  <section class="sheet" id="homeSheet" hidden>
+    <div class="box">
+      <div class="whoami"><span id="homeName">—</span><button id="signOutBtn" type="button">sign out</button></div>
+      <p class="eyebrow">Wizard</p>
+      <h2 id="homeGreet">Take a seat</h2>
+      <div class="tabs" role="tablist" style="margin-top:16px">
+        <button role="tab" aria-selected="true" id="tabCreate" type="button">New table</button>
+        <button role="tab" aria-selected="false" id="tabJoin" type="button">Join</button>
+      </div>
+      <div id="paneCreate">
+        <div class="field"><div class="lab">Rounds</div>
+          <div class="opts" id="homeLength"></div></div>
+        <button class="btn" id="createBtn" type="button">Open a table</button>
+        <div class="hint">You'll get a four-letter code to share. Others join, you deal.</div>
+      </div>
+      <div id="paneJoin" hidden>
+        <div class="field"><div class="lab">Table code</div>
+          <input class="inp code" id="joinCode" maxlength="4" placeholder="····" autocomplete="off" inputmode="latin"></div>
+        <button class="btn" id="joinBtn" type="button">Join table</button>
+        <div class="err" id="joinErr"></div>
+      </div>
+      <div class="row2" style="margin-top:20px"><button class="btn ghost" id="practiceBtn" type="button">Practice vs AI</button></div>
+    </div>
+  </section>
+
+  <!-- LOBBY / ROOM -->
+  <section class="sheet" id="lobbySheet" hidden>
+    <div class="box">
+      <div class="whoami"><span id="lobbyName">—</span></div>
+      <p class="eyebrow" id="lobbyRole">Waiting room</p>
+      <div class="codebox">
+        <div class="cl">Table code</div>
+        <div class="c" id="lobbyCode">····</div>
+        <button class="copyBtn" id="copyCodeBtn" type="button">Copy invite link</button>
+      </div>
+      <div class="lab" style="font:400 10px/1 var(--num);letter-spacing:.2em;text-transform:uppercase;color:rgba(244,236,216,.5);margin-bottom:8px">Players <span id="lobbyCount"></span></div>
+      <div id="lobbyPlayers"></div>
+      <div id="hostControls" hidden>
+        <div class="field"><div class="lab">Rounds</div><div class="opts" id="lobbyLength"></div></div>
+        <button class="btn" id="startBtn" type="button" disabled>Deal the first round</button>
+        <div class="hint" id="startHint">Need at least three players.</div>
+      </div>
+      <div id="guestWait" hidden><div class="spin"></div><p class="lede" style="text-align:center">Waiting for the host to deal…</p></div>
+      <div class="row2" style="margin-top:14px"><button class="btn ghost" id="leaveRoomBtn" type="button">Leave table</button></div>
+    </div>
+  </section>
+
+  <!-- round score -->
+  <section class="sheet" id="scoreSheet" hidden>
+    <div class="box">
+      <p class="eyebrow" id="scoreEyebrow">After round 1</p>
+      <h2 id="scoreTitle">The reckoning</h2>
+      <div style="margin:16px 0 18px"><table id="scoreTable"></table></div>
+      <button class="btn" id="nextRound" type="button">Next round</button>
+      <div id="scoreWait" hidden><div class="spin"></div><p class="lede" style="text-align:center;margin-top:4px">Waiting for the host…</p></div>
+    </div>
+  </section>
+
+  <!-- game over -->
+  <section class="sheet" id="overSheet" hidden>
+    <div class="box">
+      <p class="eyebrow" id="overEyebrow">Final standings</p>
+      <h2 id="overTitle">Game over</h2>
+      <div style="margin:16px 0 18px"><table id="overTable"></table></div>
+      <button class="btn" id="playAgain" type="button">Play again</button>
+      <div class="row2"><button class="btn ghost" id="toHome" type="button">Back to tables</button></div>
+    </div>
+  </section>
+
+  <!-- setup (practice) -->
+  <section class="sheet" id="setupSheet" hidden>
+    <div class="box">
+      <p class="eyebrow">Practice vs AI</p>
+      <h2>Set the table</h2>
+      <div class="field"><div class="lab">Players</div><div class="opts" id="pPlayers"></div></div>
+      <div class="field"><div class="lab">Rounds</div><div class="opts" id="pLength"></div></div>
+      <div class="field"><div class="lab">Opponents</div><div class="opts" id="pSkill"></div></div>
+      <button class="btn" id="pStart" type="button">Deal</button>
+      <div class="row2"><button class="btn ghost" id="pBack" type="button">Back</button></div>
+    </div>
+  </section>
+
+  <!-- menu -->
+  <section class="sheet" id="menuSheet" hidden>
+    <div class="box">
+      <p class="eyebrow">Wizard</p>
+      <h2>How a trick is won</h2>
+      <p class="lede">Follow the led suit if you can. A Wizard or Jester may be played any time.<br><br>
+        The first Wizard played takes the trick. Otherwise the highest trump wins, and with no trump in it, the highest card of the led suit. Jesters never win unless the trick is all Jesters — then the first one does.<br><br>
+        Lead a Wizard and the others may play anything. Lead a Jester and the suit is set by the next real card.<br><br>
+        Make your bid exactly for 20 plus 10 a trick. Miss by any amount and it's 10 off for each.</p>
+      <button class="btn" id="closeMenu" type="button">Back to the table</button>
+      <div class="row2"><button class="btn ghost" id="leaveGame" type="button">Leave game</button></div>
+    </div>
+  </section>
+</div>
+
+<!-- ==== FILL THIS IN (see README) ==== -->
+<script>
+window.FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCSIQG88TvvLkw_0LohMlQQugHKUj0xv8w",
+  authDomain: "wizard-be6d4.firebaseapp.com",
+  projectId: "wizard-be6d4",
+  storageBucket: "wizard-be6d4.firebasestorage.app",
+  messagingSenderId: "621636633821",
+  appId: "1:621636633821:web:4cc46fb766e4e87d9cc734"
+};
+</script>
+<script>'use strict';
+/* ============================================================
+   WIZARD — pure rules + state machine (no DOM, no network).
+   The same reducer drives local practice and the online host.
+   A "move" is { type:'trump'|'bid'|'play'|'continue', seat, value }.
+   applyMove/beginRound never mutate their input; they return fresh
+   state, so the online layer can diff and the tests can trust it.
+   ============================================================ */
+
+var SUIT_KEYS = ['S', 'H', 'D', 'C'];
+var SUITS = { S: { g: '\u2660', red: false }, H: { g: '\u2665', red: true }, D: { g: '\u2666', red: true }, C: { g: '\u2663', red: false } };
+
+function makeDeck() {
+  var d = [], s, i;
+  for (s = 0; s < 4; s++) for (i = 1; i <= 13; i++) d.push({ id: SUIT_KEYS[s] + i, kind: 'suit', suit: SUIT_KEYS[s], rank: i });
+  for (i = 0; i < 4; i++) d.push({ id: 'W' + i, kind: 'wizard', suit: null, rank: null });
+  for (i = 0; i < 4; i++) d.push({ id: 'J' + i, kind: 'jester', suit: null, rank: null });
+  return d;
+}
+function shuffle(a, rng) {
+  rng = rng || Math.random;
+  for (var i = a.length - 1; i > 0; i--) {
+    var j = Math.floor(rng() * (i + 1)), t = a[i]; a[i] = a[j]; a[j] = t;
+  }
+  return a;
+}
+function leadSuitOf(played) {
+  for (var i = 0; i < played.length; i++) {
+    var c = played[i].card;
+    if (c.kind === 'wizard') return null;
+    if (c.kind === 'jester') continue;
+    return c.suit;
+  }
+  return null;
+}
+function isLegal(card, hand, leadSuit) {
+  if (!leadSuit) return true;
+  if (card.kind !== 'suit') return true;
+  if (card.suit === leadSuit) return true;
+  for (var i = 0; i < hand.length; i++) if (hand[i].kind === 'suit' && hand[i].suit === leadSuit) return false;
+  return true;
+}
+function trickWinner(played, trump) {
+  var i, c, best = -1, bestRank = -1;
+  for (i = 0; i < played.length; i++) if (played[i].card.kind === 'wizard') return i;
+  if (trump) {
+    for (i = 0; i < played.length; i++) { c = played[i].card; if (c.kind === 'suit' && c.suit === trump && c.rank > bestRank) { best = i; bestRank = c.rank; } }
+    if (best >= 0) return best;
+  }
+  var lead = leadSuitOf(played);
+  if (lead) {
+    for (i = 0; i < played.length; i++) { c = played[i].card; if (c.kind === 'suit' && c.suit === lead && c.rank > bestRank) { best = i; bestRank = c.rank; } }
+    if (best >= 0) return best;
+  }
+  return 0;
+}
+function roundScore(bid, tricks) { return bid === tricks ? 20 + 10 * tricks : -10 * Math.abs(bid - tricks); }
+function power(c, trump) { if (c.kind === 'wizard') return 100; if (c.kind === 'jester') return 0; return (trump && c.suit === trump ? 20 : 0) + c.rank; }
+
+/* ---------------- AI (practice seats + timeout auto-play) ---------------- */
+function aiBid(hand, trump, nPlayers, cardsDealt, skill) {
+  var exp = 0;
+  for (var i = 0; i < hand.length; i++) {
+    var c = hand[i];
+    if (c.kind === 'wizard') exp += 0.95;
+    else if (c.kind === 'jester') exp += 0.02;
+    else if (trump && c.suit === trump) exp += Math.max(0.12, Math.min(0.9, 0.34 + (c.rank - 6) * 0.062));
+    else { var p = c.rank >= 13 ? 0.7 : c.rank === 12 ? 0.5 : c.rank === 11 ? 0.3 : c.rank >= 9 ? 0.14 : 0.04; exp += p * (1 - (nPlayers - 3) * 0.07); }
+  }
+  var noise = skill === 'sharp' ? 0.22 : 1.15;
+  return Math.max(0, Math.min(cardsDealt, Math.round(exp + (Math.random() - 0.5) * noise)));
+}
+function bestSuitFor(hand) {
+  var count = { S: 0, H: 0, D: 0, C: 0 };
+  hand.forEach(function (c) { if (c.kind === 'suit') count[c.suit] += 1 + c.rank / 26; });
+  var bestK = 'S'; SUIT_KEYS.forEach(function (k) { if (count[k] > count[bestK]) bestK = k; });
+  return bestK;
+}
+function aiCard(hand, trick, trump, bid, tricks, nPlayers, skill) {
+  var lead = leadSuitOf(trick);
+  var legal = hand.filter(function (c) { return isLegal(c, hand, lead); });
+  if (!legal.length) legal = hand.slice();
+  var byPower = function (a, b) { return power(a, trump) - power(b, trump); };
+  if (skill === 'casual' && Math.random() < 0.32) return legal[Math.floor(Math.random() * legal.length)];
+  var need = bid - tricks, left = hand.length, wantWin = need > 0;
+  if (trick.length === 0) { legal.sort(byPower); return wantWin ? legal[legal.length - 1] : legal[0]; }
+  var winners = [], losers = [];
+  legal.forEach(function (c) {
+    var test = trick.concat([{ seat: -1, card: c }]);
+    if (trickWinner(test, trump) === test.length - 1) winners.push(c); else losers.push(c);
+  });
+  winners.sort(byPower); losers.sort(byPower);
+  var isLast = trick.length === nPlayers - 1;
+  if (wantWin) {
+    if (winners.length) { if (isLast) return winners[0]; if (need >= left) return winners[winners.length - 1]; return Math.random() < 0.4 ? winners[winners.length - 1] : winners[0]; }
+    return losers[0];
+  }
+  if (losers.length) return isLast ? losers[losers.length - 1] : losers[0];
+  return winners[0];
+}
+
+/* ---------------- state machine ---------------- */
+function maxRoundsFor(nPlayers, length) {
+  var full = Math.floor(60 / nPlayers);
+  return length === 'quick' ? Math.min(7, full) : full;
+}
+function createGame(seats, length) {
+  var n = seats.length;
+  return {
+    status: 'playing', length: length, seats: seats.slice(), nPlayers: n,
+    scores: seats.map(function () { return 0; }),
+    round: 0, maxRounds: maxRoundsFor(n, length),
+    dealer: Math.floor(Math.random() * n), leader: 0, turn: 0,
+    trump: null, trumpCard: null, needTrump: false,
+    phase: 'roundstart',
+    bids: seats.map(function () { return null; }),
+    tricksWon: seats.map(function () { return 0; }),
+    hands: seats.map(function () { return []; }),
+    handCounts: seats.map(function () { return 0; }),
+    trick: [], trickNo: 0, lastTrick: null, log: [], rev: 0
+  };
+}
+function clone(s) {
+  return {
+    status: s.status, length: s.length, seats: s.seats, nPlayers: s.nPlayers,
+    scores: s.scores.slice(), round: s.round, maxRounds: s.maxRounds,
+    dealer: s.dealer, leader: s.leader, turn: s.turn,
+    trump: s.trump, trumpCard: s.trumpCard, needTrump: s.needTrump, phase: s.phase,
+    bids: s.bids.slice(), tricksWon: s.tricksWon.slice(),
+    hands: s.hands.map(function (h) { return h.slice(); }),
+    handCounts: s.handCounts.slice(),
+    trick: s.trick.slice(), trickNo: s.trickNo, lastTrick: s.lastTrick,
+    log: s.log.slice(), rev: s.rev
+  };
+}
+/* deal the next round; rng is injectable for deterministic tests */
+function beginRound(state, rng) {
+  var s = clone(state), n = s.nPlayers, i;
+  s.round += 1;
+  var deck = shuffle(makeDeck(), rng);
+  s.hands = [];
+  for (i = 0; i < n; i++) s.hands.push(deck.splice(0, s.round));
+  s.handCounts = s.hands.map(function (h) { return h.length; });
+  s.trumpCard = deck.length ? deck[0] : null;
+  s.trump = null; s.needTrump = false;
+  if (s.trumpCard) {
+    if (s.trumpCard.kind === 'suit') s.trump = s.trumpCard.suit;
+    else if (s.trumpCard.kind === 'wizard') s.needTrump = true;
+  }
+  s.leader = (s.dealer + 1) % n;
+  s.turn = s.leader;
+  s.bids = s.seats.map(function () { return null; });
+  s.tricksWon = s.seats.map(function () { return 0; });
+  s.trick = []; s.trickNo = 0; s.lastTrick = null;
+  s.phase = s.needTrump ? 'trumpselect' : 'bidding';
+  s.turn = s.needTrump ? s.dealer : s.leader;
+  s.rev += 1;
+  return s;
+}
+function nextSeat(s, seat) { return (seat + 1) % s.nPlayers; }
+
+/* validate a move against current state; returns null if OK, else reason */
+function moveError(s, mv) {
+  if (!mv || typeof mv.seat !== 'number') return 'no move';
+  if (s.phase === 'trumpselect') {
+    if (mv.type !== 'trump') return 'awaiting trump choice';
+    if (mv.seat !== s.dealer) return 'only the dealer names trump';
+    if (SUIT_KEYS.indexOf(mv.value) < 0) return 'bad suit';
+    return null;
+  }
+  if (s.phase === 'bidding') {
+    if (mv.type !== 'bid') return 'awaiting a bid';
+    if (mv.seat !== s.turn) return 'not your turn to bid';
+    if (!(mv.value >= 0 && mv.value <= s.round)) return 'bid out of range';
+    return null;
+  }
+  if (s.phase === 'playing') {
+    if (mv.type !== 'play') return 'awaiting a card';
+    if (mv.seat !== s.turn) return 'not your turn';
+    var hand = s.hands[mv.seat];
+    var card = hand.filter(function (c) { return c.id === mv.value; })[0];
+    if (!card) return 'card not in hand';
+    if (!isLegal(card, hand, leadSuitOf(s.trick))) return 'must follow suit';
+    return null;
+  }
+  if (s.phase === 'roundend') {
+    if (mv.type !== 'continue') return 'round is over';
+    return null;
+  }
+  return 'no moves in phase ' + s.phase;
+}
+
+function scoreRound(s) {
+  var rows = [];
+  for (var i = 0; i < s.nPlayers; i++) {
+    var delta = roundScore(s.bids[i], s.tricksWon[i]);
+    s.scores[i] += delta;
+    rows.push({ seat: i, bid: s.bids[i], tricks: s.tricksWon[i], delta: delta, total: s.scores[i] });
+  }
+  s.log = s.log.concat([{ round: s.round, rows: rows }]);
+}
+
+/* apply a *validated* move; caller should check moveError first */
+function applyMove(state, mv) {
+  var s = clone(state), n = s.nPlayers;
+  if (s.phase === 'trumpselect') {
+    s.trump = mv.value; s.needTrump = false; s.phase = 'bidding'; s.turn = s.leader; s.rev++;
+    return s;
+  }
+  if (s.phase === 'bidding') {
+    s.bids[mv.seat] = mv.value;
+    if (mv.seat === s.dealer) { s.phase = 'playing'; s.turn = s.leader; }
+    else s.turn = nextSeat(s, mv.seat);
+    s.rev++;
+    return s;
+  }
+  if (s.phase === 'playing') {
+    var hand = s.hands[mv.seat];
+    var idx = hand.map(function (c) { return c.id; }).indexOf(mv.value);
+    var card = hand[idx];
+    hand.splice(idx, 1);
+    s.handCounts[mv.seat] = hand.length;
+    s.trick = s.trick.concat([{ seat: mv.seat, card: card }]);
+    if (s.trick.length === n) {
+      var wRel = trickWinner(s.trick, s.trump);
+      var wSeat = s.trick[wRel].seat;
+      s.tricksWon[wSeat] += 1;
+      s.lastTrick = { cards: s.trick.slice(), winner: wSeat };
+      s.trick = [];
+      s.trickNo += 1;
+      s.leader = wSeat;
+      if (s.trickNo >= s.round) { scoreRound(s); s.phase = 'roundend'; s.turn = -1; }
+      else s.turn = wSeat;
+    } else {
+      s.turn = nextSeat(s, mv.seat);
+    }
+    s.rev++;
+    return s;
+  }
+  if (s.phase === 'roundend') {
+    s.dealer = nextSeat(s, s.dealer);
+    if (s.round >= s.maxRounds) { s.phase = 'gameover'; s.status = 'done'; s.turn = -1; s.rev++; return s; }
+    return beginRound(s, mv.rng);
+  }
+  return s;
+}
+
+/* default action for a timed-out / disconnected seat */
+function autoMove(s, seat) {
+  if (s.phase === 'trumpselect' && seat === s.dealer) return { type: 'trump', seat: seat, value: bestSuitFor(s.hands[seat]) };
+  if (s.phase === 'bidding' && seat === s.turn) return { type: 'bid', seat: seat, value: aiBid(s.hands[seat], s.trump, s.nPlayers, s.round, 'sharp') };
+  if (s.phase === 'playing' && seat === s.turn) {
+    var c = aiCard(s.hands[seat], s.trick, s.trump, s.bids[seat], s.tricksWon[seat], s.nPlayers, 'sharp');
+    return { type: 'play', seat: seat, value: c.id };
+  }
+  return null;
+}
+
+var API = {
+  SUIT_KEYS: SUIT_KEYS, SUITS: SUITS, makeDeck: makeDeck, shuffle: shuffle,
+  leadSuitOf: leadSuitOf, isLegal: isLegal, trickWinner: trickWinner, roundScore: roundScore, power: power,
+  aiBid: aiBid, aiCard: aiCard, bestSuitFor: bestSuitFor,
+  maxRoundsFor: maxRoundsFor, createGame: createGame, beginRound: beginRound,
+  moveError: moveError, applyMove: applyMove, autoMove: autoMove, clone: clone
+};
+if (typeof module !== 'undefined' && module.exports) module.exports = API;
+if (typeof window !== 'undefined') window.WizardCore = API;
+</script>
+<script>'use strict';
+/* ============================================================
+   HOST / REFEREE logic, kept pure so it can be tested without
+   Firebase. The live layer calls these and persists the result.
+
+   Firestore shape (all under rooms/{code}):
+     room doc         — public game state (host is the only writer)
+     hands/{uid}      — that player's private cards (host writes, owner reads)
+     moves/{uid}      — a player's pending action (owner writes, host consumes)
+     present/{uid}    — heartbeat timestamp (owner writes, all read)
+
+   The public room stores hands as counts only; the referee keeps the
+   real hands in the private docs and mirrors them into a working copy
+   when it needs to resolve a move.
+   ============================================================ */
+
+var Core = (typeof require !== 'undefined') ? require('./core.js') : window.WizardCore;
+
+/* Build the pure-core state from the public room + the private hand docs.
+   handsByUid maps uid -> [cards]. Missing hands come back empty. */
+function assemble(room, handsByUid) {
+  var s = {
+    status: room.status === 'done' ? 'done' : 'playing',
+    length: room.settings.length, seats: room.seats, nPlayers: room.seats.length,
+    scores: room.scores.slice(), round: room.round, maxRounds: room.maxRounds,
+    dealer: room.dealer, leader: room.leader, turn: room.turn,
+    trump: room.trump, trumpCard: room.trumpCard, needTrump: room.needTrump,
+    phase: room.phase,
+    bids: room.bids.slice(), tricksWon: room.tricksWon.slice(),
+    hands: room.seats.map(function (st) { return (handsByUid[st.uid] || []).slice(); }),
+    handCounts: room.handCounts.slice(),
+    trick: room.trick.slice(), trickNo: room.trickNo, lastTrick: room.lastTrick,
+    log: room.log.slice(), rev: room.rev
+  };
+  return s;
+}
+
+/* Split a pure-core state back into { room, hands } for persistence. */
+function disassemble(s) {
+  var hands = {};
+  s.seats.forEach(function (st, i) { hands[st.uid] = s.hands[i]; });
+  var room = {
+    status: s.phase === 'gameover' ? 'done' : 'playing',
+    settings: { length: s.length }, seats: s.seats,
+    scores: s.scores, round: s.round, maxRounds: s.maxRounds,
+    dealer: s.dealer, leader: s.leader, turn: s.turn,
+    trump: s.trump, trumpCard: s.trumpCard, needTrump: s.needTrump,
+    phase: s.phase, bids: s.bids, tricksWon: s.tricksWon,
+    handCounts: s.handCounts, trick: s.trick, trickNo: s.trickNo,
+    lastTrick: s.lastTrick, log: s.log, rev: s.rev
+  };
+  return { room: room, hands: hands };
+}
+
+/* Which uid is the referee waiting on right now (or null in roundend/gameover)? */
+function seatOnClock(s) {
+  if (s.phase === 'trumpselect') return s.dealer;
+  if (s.phase === 'bidding' || s.phase === 'playing') return s.turn;
+  return -1;
+}
+
+/* Given the current state and any pending player moves (uid -> move),
+   plus wall-clock `now` and per-uid presence, return the next state to
+   persist or null if nothing to do. Deterministic apart from dealing. */
+function referee(state, pendingByUid, now, presence, opts) {
+  opts = opts || {};
+  var turnMs = opts.turnMs || 30000;
+
+  /* roundend advances only when the host presses continue (passed as a move) */
+  if (state.phase === 'roundend') {
+    var cont = anyMove(pendingByUid, 'continue');
+    if (cont) return Core.applyMove(state, { type: 'continue', seat: 0, rng: opts.rng });
+    return null;
+  }
+  if (state.phase === 'gameover') return null;
+
+  var seat = seatOnClock(state);
+  if (seat < 0) return null;
+  var uid = state.seats[seat].uid;
+  var mv = pendingByUid[uid];
+
+  if (mv && (mv.type === expectedType(state))) {
+    mv = { type: mv.type, seat: seat, value: mv.value };
+    if (!Core.moveError(state, mv)) return Core.applyMove(state, mv);
+    return null; /* illegal move from a client: ignore, let it retry or time out */
+  }
+
+  /* nobody submitted in time (or they're disconnected): auto-play */
+  var deadline = state._turnStart ? state._turnStart + turnMs : null;
+  var absent = presence && (!presence[uid] || now - presence[uid] > (opts.presenceMs || 12000));
+  if ((deadline && now >= deadline) || absent) {
+    var auto = Core.autoMove(state, seat);
+    if (auto && !Core.moveError(state, auto)) return Core.applyMove(state, auto);
+  }
+  return null;
+}
+function expectedType(s) { return s.phase === 'trumpselect' ? 'trump' : s.phase === 'bidding' ? 'bid' : 'play'; }
+function anyMove(byUid, type) {
+  for (var k in byUid) if (byUid[k] && byUid[k].type === type) return byUid[k];
+  return null;
+}
+
+/* Start a fresh game from a lobby: seats in join order, host deals round 1. */
+function startFromLobby(room, rng) {
+  var g = Core.createGame(room.seats, room.settings.length);
+  g.dealer = Math.floor((rng || Math.random)() * g.nPlayers);
+  g = Core.beginRound(g, rng);
+  return disassemble(g);
+}
+
+var API = {
+  assemble: assemble, disassemble: disassemble, referee: referee,
+  seatOnClock: seatOnClock, expectedType: expectedType, startFromLobby: startFromLobby
+};
+if (typeof module !== 'undefined' && module.exports) module.exports = API;
+if (typeof window !== 'undefined') window.WizardHost = API;
+</script>
+<script>'use strict';
+/* ============================================================
+   App layer. Renders a "view" (a core state object) from the
+   perspective of `mySeat`, and routes the player's actions through
+   a Controller that is either LOCAL (practice vs AI) or ONLINE
+   (Firebase). The two share every pixel of rendering.
+   ============================================================ */
+(function () {
+var Core = window.WizardCore, Host = window.WizardHost;
+var SUITS = Core.SUITS, SUIT_KEYS = Core.SUIT_KEYS;
+var $ = function (id) { return document.getElementById(id); };
+var App = window.App = window.App || {};
+App.mode = null; App.hasAuth = false; App.user = null;
+
+/* ---------- sheets ---------- */
+var sheets = ['authSheet','configSheet','homeSheet','lobbySheet','scoreSheet','overSheet','setupSheet','menuSheet','bidPanel','trumpPanel'];
+function hideAll() { sheets.forEach(function (id) { var e = $(id); if (e) e.hidden = true; }); }
+function show(id) { var e = $(id); if (e) e.hidden = false; }
+
+/* ---------- toast ---------- */
+var toastT = null;
+function toast(t) { var e = $('toast'); e.textContent = t; e.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(function () { e.classList.remove('show'); }, 1600); }
+
+/* ---------- card rendering ---------- */
+var SVG_WIZ = '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.4l2.1 6.1 6.4.2-5.1 3.9 1.8 6.2L12 15.2 6.8 18.8l1.8-6.2-5.1-3.9 6.4-.2z"/></svg>';
+var SVG_JES = '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5 15c-1.2-4.2 1.4-8 7-8s8.2 3.8 7 8z"/><rect x="4" y="15.4" width="16" height="2.2" rx="1"/><circle cx="3.2" cy="12.6" r="1.9"/><circle cx="20.8" cy="12.6" r="1.9"/><circle cx="12" cy="4.4" r="1.9"/></svg>';
+function cardName(c) {
+  if (c.kind === 'wizard') return 'Wizard';
+  if (c.kind === 'jester') return 'Jester';
+  return c.rank + ' of ' + { S: 'spades', H: 'hearts', D: 'diamonds', C: 'clubs' }[c.suit];
+}
+function cardEl(c) {
+  var d = document.createElement('div'), tag = 'font:400 7.5px/1 var(--num);letter-spacing:.12em';
+  if (c.kind === 'wizard') { d.className = 'card wizard'; d.innerHTML = '<span class="mid">' + SVG_WIZ + '<span style="' + tag + '">WIZARD</span></span>'; }
+  else if (c.kind === 'jester') { d.className = 'card jester'; d.innerHTML = '<span class="mid">' + SVG_JES + '<span style="' + tag + '">JESTER</span></span>'; }
+  else {
+    d.className = 'card' + (SUITS[c.suit].red ? ' red' : '');
+    d.innerHTML = '<span class="r">' + c.rank + '</span><span class="mid">' + SUITS[c.suit].g + '</span><span class="r b">' + c.rank + '</span>';
+  }
+  d.setAttribute('aria-label', cardName(c));
+  return d;
+}
+function backEl() { var d = document.createElement('div'); d.className = 'card back'; return d; }
+
+/* ---------- board ---------- */
+function renderRail(v, mySeat, presence) {
+  var el = $('rail'); el.innerHTML = '';
+  v.seats.forEach(function (p, i) {
+    var d = document.createElement('div');
+    var bid = v.bids[i], tricks = v.tricksWon[i];
+    var off = presence && presence[p.uid] === false;
+    d.className = 'seat' + (i === v.turn && (v.phase === 'bidding' || v.phase === 'playing') ? ' turn' : '') +
+      (i === mySeat ? ' me' : '') + (off ? ' off' : '') +
+      (bid !== null && tricks === bid ? ' exact' : '') + (bid !== null && tricks > bid ? ' bust' : '');
+    var pips = '';
+    if (bid !== null) {
+      var won = Math.min(tricks, bid), over = Math.max(0, tricks - bid), empty = Math.max(0, bid - tricks), k;
+      for (k = 0; k < won; k++) pips += '<i class="pip won"></i>';
+      for (k = 0; k < over; k++) pips += '<i class="pip over"></i>';
+      for (k = 0; k < empty; k++) pips += '<i class="pip"></i>';
+    }
+    var waiting = (v.phase === 'bidding' || v.phase === 'playing') && i === v.turn;
+    d.innerHTML = '<div class="who">' + esc(p.name) + (i === mySeat ? ' ·' : '') + '</div>' +
+      '<div class="tot">' + v.scores[i] + '</div><div class="pips">' + pips + '</div>' +
+      (bid !== null ? '<div class="bidmark">' + bid + '</div>' : '') +
+      (i === v.dealer ? '<div class="dealerdot">DEALS</div>' : '') +
+      (waiting ? '<div class="waitdot"></div>' : '');
+    el.appendChild(d);
+  });
+}
+function renderTrick(v) {
+  var el = $('trick'); el.innerHTML = '';
+  var cards = v.trick.length ? v.trick : (v.lastTrick ? v.lastTrick.cards : []);
+  var winnerSeat = (!v.trick.length && v.lastTrick) ? v.lastTrick.winner : -1;
+  cards.forEach(function (pl) {
+    var wrap = document.createElement('div');
+    wrap.className = 'played' + (pl.seat === winnerSeat ? ' winner' : '');
+    var lbl = document.createElement('div'); lbl.className = 'lbl'; lbl.textContent = v.seats[pl.seat].name;
+    wrap.appendChild(cardEl(pl.card)); wrap.appendChild(lbl);
+    el.appendChild(wrap);
+  });
+}
+function sortHand(hand, trump) {
+  var order = { wizard: 0, suit: 1, jester: 2 };
+  var so = function (c) { return c.kind !== 'suit' ? 0 : (c.suit === trump ? 0 : 1) * 10 + SUIT_KEYS.indexOf(c.suit); };
+  return hand.slice().sort(function (a, b) {
+    if (order[a.kind] !== order[b.kind]) return order[a.kind] - order[b.kind];
+    if (a.kind !== 'suit') return 0;
+    if (so(a) !== so(b)) return so(a) - so(b);
+    return b.rank - a.rank;
+  });
+}
+function renderHand(v, mySeat, myHand, canPlay, onPlay) {
+  var el = $('hand'); el.innerHTML = '';
+  var lead = Core.leadSuitOf(v.trick);
+  sortHand(myHand, v.trump).forEach(function (c) {
+    var d = cardEl(c), ok = Core.isLegal(c, myHand, lead);
+    if (canPlay) d.classList.add(ok ? 'legal' : 'illegal');
+    if (canPlay) {
+      var act = function () {
+        if (!ok) { d.classList.add('shake'); setTimeout(function () { d.classList.remove('shake'); }, 340); toast('Follow ' + SUITS[lead].g + ' while you hold one'); return; }
+        onPlay(c);
+      };
+      d.addEventListener('click', act); d.tabIndex = 0;
+      d.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); act(); } });
+    }
+    el.appendChild(d);
+  });
+  layoutHand();
+}
+function layoutHand() {
+  var el = $('hand'), kids = el.children, n = kids.length; if (!n) return;
+  var cw = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--cw')) || 62;
+  var avail = $('handWrap').clientWidth - 16;
+  var step = n > 1 ? Math.min(cw + 5, (avail - cw) / (n - 1)) : cw;
+  step = Math.max(step, 17);
+  for (var i = 0; i < n; i++) kids[i].style.marginLeft = i === 0 ? '0px' : (step - cw) + 'px';
+}
+window.addEventListener('resize', layoutHand);
+function renderTrump(v) {
+  $('roundLabel').textContent = v.status === 'done' ? 'Wizard' : 'Round ' + v.round + ' / ' + v.maxRounds;
+  $('trumpGlyph').innerHTML = v.trump
+    ? '<span style="color:' + (SUITS[v.trump].red ? 'var(--crimson)' : 'var(--parch)') + '">' + SUITS[v.trump].g + '</span>'
+    : '<span style="font-family:var(--num);font-size:13px;letter-spacing:.1em">NONE</span>';
+}
+function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+
+function setMsg(t) { $('msg').textContent = t; }
+
+/* ---------- bid / trump input ---------- */
+function openBid(maxBid, hint, onBid) {
+  $('bidTitle').textContent = 'Your bid'; $('bidHint').textContent = hint;
+  var box = $('bidNums'); box.innerHTML = '';
+  for (var i = 0; i <= maxBid; i++) (function (val) {
+    var b = document.createElement('button'); b.className = 'num'; b.type = 'button'; b.textContent = val;
+    b.addEventListener('click', function () { $('bidPanel').hidden = true; onBid(val); });
+    box.appendChild(b);
+  })(i);
+  show('bidPanel');
+}
+function openTrump(onPick) {
+  var box = $('trumpOpts'); box.innerHTML = '';
+  SUIT_KEYS.forEach(function (k) {
+    var b = document.createElement('button'); b.className = 'opt'; b.type = 'button';
+    b.innerHTML = '<span style="font-size:26px;color:' + (SUITS[k].red ? 'var(--crimson)' : 'var(--parch)') + '">' + SUITS[k].g + '</span>';
+    b.setAttribute('aria-label', { S: 'spades', H: 'hearts', D: 'diamonds', C: 'clubs' }[k]);
+    b.addEventListener('click', function () { $('trumpPanel').hidden = true; onPick(k); });
+    box.appendChild(b);
+  });
+  show('trumpPanel');
+}
+
+/* ---------- score / over ---------- */
+function showScores(v, iface) {
+  $('scoreEyebrow').textContent = 'After round ' + v.round + ' of ' + v.maxRounds;
+  var made = v.log[v.log.length - 1].rows.filter(function (r) { return r.bid === r.tricks; }).length;
+  $('scoreTitle').textContent = made === 0 ? 'Nobody made it' : made === v.nPlayers ? 'Everyone made it' : 'The reckoning';
+  var last = v.log[v.log.length - 1];
+  var rows = '<tr><th>Player</th><th>Bid</th><th>Took</th><th>Round</th><th>Total</th></tr>';
+  last.rows.map(function (r) { return r; }).sort(function (a, b) { return b.total - a.total; }).forEach(function (r) {
+    rows += '<tr class="' + (r.delta > 0 ? 'hit' : 'miss') + '"><td>' + esc(v.seats[r.seat].name) + '</td><td>' + r.bid +
+      '</td><td>' + r.tricks + '</td><td class="delta">' + (r.delta > 0 ? '+' : '') + r.delta + '</td><td>' + r.total + '</td></tr>';
+  });
+  $('scoreTable').innerHTML = rows;
+  var host = iface.canAdvance;
+  $('nextRound').hidden = !host;
+  $('scoreWait').hidden = host;
+  $('nextRound').textContent = v.round >= v.maxRounds ? 'Final standings' : 'Deal round ' + (v.round + 1);
+  show('scoreSheet');
+}
+function showOver(v, iface) {
+  var ranked = v.seats.map(function (s, i) { return { i: i, name: s.name, score: v.scores[i] }; }).sort(function (a, b) { return b.score - a.score; });
+  var meWon = iface.mySeat >= 0 && ranked[0].i === iface.mySeat;
+  $('overEyebrow').textContent = 'Final standings';
+  $('overTitle').textContent = meWon ? 'You take the game' : ranked[0].name + ' takes the game';
+  var rows = '<tr><th>Player</th><th>Exact bids</th><th>Score</th></tr>';
+  ranked.forEach(function (r, idx) {
+    var hits = v.log.filter(function (l) { return l.rows[r.i].bid === l.rows[r.i].tricks; }).length;
+    rows += '<tr class="' + (idx === 0 ? 'hit' : '') + '"><td>' + (idx === 0 ? '\u2726 ' : '') + esc(r.name) + '</td><td>' + hits + ' / ' + v.log.length + '</td><td>' + r.score + '</td></tr>';
+  });
+  $('overTable').innerHTML = rows;
+  $('playAgain').hidden = !iface.canAdvance;
+  show('overSheet');
+}
+
+/* ============================================================
+   RENDER: given a view + interface flags, paint everything.
+   iface = { mySeat, myHand, myTurn, canBid, canPlay, canTrump,
+             canAdvance, onBid, onPlay, onTrump, presence }
+   ============================================================ */
+var current = { v: null, iface: null };
+function paint(v, iface) {
+  current.v = v; current.iface = iface;
+  renderTrump(v); renderRail(v, iface.mySeat, iface.presence); renderTrick(v);
+  renderHand(v, iface.mySeat, iface.myHand || [], iface.canPlay, iface.onPlay || function () {});
+
+  // sheets driven by phase
+  if (v.phase === 'roundend') { showScores(v, iface); } else { $('scoreSheet').hidden = true; }
+  if (v.phase === 'gameover') { showOver(v, iface); } else { $('overSheet').hidden = true; }
+
+  if (v.phase === 'trumpselect') {
+    if (iface.canTrump) { setMsg('You turned up a Wizard — choose the trump.'); openTrump(iface.onTrump); }
+    else { $('trumpPanel').hidden = true; setMsg(v.seats[v.dealer].name + ' is choosing the trump…'); }
+  } else { $('trumpPanel').hidden = true; }
+
+  if (v.phase === 'bidding') {
+    if (iface.canBid) {
+      var claimed = v.bids.reduce(function (s, b) { return s + (b || 0); }, 0);
+      var before = v.bids.filter(function (b) { return b !== null; }).length;
+      setMsg('Name the tricks you will take.');
+      openBid(v.round, v.round + (v.round === 1 ? ' trick is' : ' tricks are') + ' out there' + (before ? '; ' + claimed + ' already claimed.' : '; you bid first.'), iface.onBid);
+    } else { $('bidPanel').hidden = true; setMsg(v.seats[v.turn].name + ' is bidding…'); }
+  } else { $('bidPanel').hidden = true; }
+
+  if (v.phase === 'playing') {
+    if (iface.myTurn) {
+      var lead = Core.leadSuitOf(v.trick);
+      setMsg(v.trick.length === 0 ? 'Your lead.' : lead ? 'Following ' + SUITS[lead].g + '.' : 'Play anything.');
+    } else setMsg(v.seats[v.turn].name + ' to play…');
+  }
+}
+function repaintLast() { if (current.v) paint(current.v, current.iface); }
+
+/* ============================================================
+   LOCAL controller — practice vs AI. Seat 0 is you.
+   ============================================================ */
+var localTimer = null;
+function startPractice(cfg) {
+  clearTimeout(localTimer);
+  hideAll();
+  var seats = [{ uid: 'me', name: 'You' }];
+  var NAMES = ['Ada', 'Bram', 'Cleo', 'Dorn', 'Esme'];
+  for (var i = 1; i < cfg.players; i++) seats.push({ uid: 'ai' + i, name: NAMES[i - 1] });
+  var s = Core.createGame(seats, cfg.length);
+  s.dealer = Math.floor(Math.random() * cfg.players);
+  s = Core.beginRound(s);
+  var skill = cfg.skill;
+
+  function iface(extra) {
+    return Object.assign({
+      mySeat: 0, myHand: s.hands[0], presence: null,
+      myTurn: s.turn === 0, canBid: false, canPlay: false, canTrump: false, canAdvance: false,
+      onBid: function (v) { step({ type: 'bid', seat: 0, value: v }); },
+      onPlay: function (c) { step({ type: 'play', seat: 0, value: c.id }); },
+      onTrump: function (k) { step({ type: 'trump', seat: 0, value: k }); }
+    }, extra || {});
+  }
+  function render() {
+    var canTrump = s.phase === 'trumpselect' && s.dealer === 0;
+    var canBid = s.phase === 'bidding' && s.turn === 0;
+    var canPlay = s.phase === 'playing' && s.turn === 0;
+    paint(s, iface({ canTrump: canTrump, canBid: canBid, canPlay: canPlay, canAdvance: s.phase === 'roundend' || s.phase === 'gameover' }));
+  }
+  function step(mv) {
+    var err = Core.moveError(s, mv); if (err) { toast(err); return; }
+    s = Core.applyMove(s, mv); render(); pump();
+  }
+  function pump() {
+    clearTimeout(localTimer);
+    if (s.phase === 'gameover') return;
+    if (s.phase === 'roundend') return; // wait for Next click
+    var seat = s.phase === 'trumpselect' ? s.dealer : s.turn;
+    if (seat === 0) return; // human's move
+    var delay = s.phase === 'playing' ? 620 : 480;
+    localTimer = setTimeout(function () {
+      var mv;
+      if (s.phase === 'trumpselect') mv = { type: 'trump', seat: seat, value: Core.bestSuitFor(s.hands[seat]) };
+      else if (s.phase === 'bidding') { mv = { type: 'bid', seat: seat, value: Core.aiBid(s.hands[seat], s.trump, s.nPlayers, s.round, skill) }; toast(s.seats[seat].name + ' bids ' + mv.value); }
+      else { var c = Core.aiCard(s.hands[seat], s.trick, s.trump, s.bids[seat], s.tricksWon[seat], s.nPlayers, skill); mv = { type: 'play', seat: seat, value: c.id }; }
+      s = Core.applyMove(s, mv);
+      render();
+      if (s.phase === 'playing' && s.trick.length === 0 && s.lastTrick) {
+        // let the completed trick sit a beat before the next lead
+        clearTimeout(localTimer);
+        localTimer = setTimeout(pump, 900);
+      } else pump();
+    }, delay);
+  }
+  App.mode = 'local'; App.leave = function () { clearTimeout(localTimer); goHomeOrAuth(); };
+  App.advance = function () { if (s.phase === 'gameover') { startPractice(cfg); } else { step({ type: 'continue', seat: 0 }); } };
+  render(); pump();
+}
+
+/* ============================================================
+   ONLINE controller — thin wrapper the module layer calls into.
+   The module owns Firebase; it hands us a `net` object and pushes
+   room/hand snapshots at us via App.online.update().
+   ============================================================ */
+var online = { net: null, room: null, myUid: null, myHand: [], presence: {} };
+App_registerOnline();
+function App_registerOnline() {
+  App.online = {
+    update: function (room, myHand, presence, myUid) {
+      online.room = room; online.myHand = myHand || []; online.presence = presence || {}; online.myUid = myUid;
+      if (!room || room.status === 'lobby') return; // lobby handled separately
+      renderOnline();
+    },
+    net: function (net) { online.net = net; }
+  };
+}
+function renderOnline() {
+  var room = online.room; if (!room) return;
+  hideSheetsForTable();
+  var v = Host.assemble(room, keyById(room.seats, online.myHand, online.myUid));
+  var mySeat = room.seats.findIndex(function (s) { return s.uid === online.myUid; });
+  var isHost = room.hostUid === online.myUid;
+  var pres = {};
+  room.seats.forEach(function (s) { pres[s.uid] = online.presence[s.uid] !== false; });
+
+  paint(v, {
+    mySeat: mySeat, myHand: online.myHand, presence: pres,
+    myTurn: v.phase === 'playing' && v.turn === mySeat,
+    canBid: v.phase === 'bidding' && v.turn === mySeat,
+    canPlay: v.phase === 'playing' && v.turn === mySeat,
+    canTrump: v.phase === 'trumpselect' && v.dealer === mySeat,
+    canAdvance: isHost,
+    onBid: function (val) { online.net.submit({ type: 'bid', value: val }); $('bidPanel').hidden = true; setMsg('Bid in.'); },
+    onPlay: function (c) { online.net.submit({ type: 'play', value: c.id }); },
+    onTrump: function (k) { online.net.submit({ type: 'trump', value: k }); $('trumpPanel').hidden = true; }
+  });
+}
+function keyById(seats, myHand, myUid) { var m = {}; seats.forEach(function (s) { m[s.uid] = s.uid === myUid ? myHand : []; }); return m; }
+function hideSheetsForTable() {
+  ['authSheet','configSheet','homeSheet','lobbySheet','setupSheet','menuSheet'].forEach(function (id) { $(id).hidden = true; });
+}
+
+/* ---------- lobby rendering (online) ---------- */
+App.renderLobby = function (room, myUid, presence) {
+  hideAll();
+  var isHost = room.hostUid === myUid;
+  $('lobbyRole').textContent = isHost ? 'Your table' : 'Waiting room';
+  $('lobbyCode').textContent = room.code;
+  $('lobbyCount').textContent = '(' + room.seats.length + '/6)';
+  var list = $('lobbyPlayers'); list.innerHTML = '';
+  room.seats.forEach(function (s) {
+    var on = presence[s.uid] !== false;
+    var d = document.createElement('div'); d.className = 'lp';
+    d.innerHTML = '<span class="dot' + (on ? '' : ' off') + '"></span><span class="nm">' + esc(s.name) + '</span>' +
+      (s.uid === room.hostUid ? '<span class="tag">Host</span>' : (s.uid === myUid ? '<span class="tag">You</span>' : ''));
+    list.appendChild(d);
+  });
+  $('hostControls').hidden = !isHost;
+  $('guestWait').hidden = isHost;
+  if (isHost) {
+    var enough = room.seats.length >= 3;
+    $('startBtn').disabled = !enough;
+    $('startHint').textContent = enough ? 'Deal when everyone\u2019s in — up to six play.' : 'Need at least three players.';
+  }
+  show('lobbySheet');
+};
+
+/* ============================================================
+   Screen flow + wiring
+   ============================================================ */
+function goHomeOrAuth() {
+  clearTimeout(localTimer);
+  hideAll();
+  if (App.hasAuth && App.user) { renderHome(); }
+  else if (window.__wizardConfigured) { show('authSheet'); }
+  else { show('authSheet'); }
+}
+function renderHome() {
+  hideAll();
+  $('homeName').textContent = App.user ? App.user.name : '';
+  show('homeSheet');
+}
+App.showAuth = function (configured) {
+  hideAll();
+  if (!configured) { /* still allow practice */ }
+  show('authSheet');
+};
+App.showConfigNeeded = function () { hideAll(); show('configSheet'); };
+App.onSignedIn = function (user) { App.hasAuth = true; App.user = user; renderHome(); };
+App.onSignedOut = function () { App.hasAuth = false; App.user = null; hideAll(); show('authSheet'); };
+App.toHome = function () { renderHome(); };
+App.toLobby = function () { /* handled by renderLobby via snapshots */ };
+
+/* option builders */
+var pcfg = { players: 4, length: 'quick', skill: 'sharp' };
+var homeCfg = { length: 'quick' };
+function buildOpts(host, list, get, set, render) {
+  host.innerHTML = '';
+  list.forEach(function (v) {
+    var b = document.createElement('button'); b.className = 'opt'; b.type = 'button';
+    b.innerHTML = render(v); b.setAttribute('aria-pressed', String(get() === v.val));
+    b.addEventListener('click', function () { set(v.val); });
+    host.appendChild(b);
+  });
+}
+function lengthLabel(players, val) {
+  var full = Math.floor(60 / players);
+  return val === 'quick' ? 'Short<small>' + Math.min(7, full) + ' rounds</small>' : 'Full<small>' + full + ' rounds</small>';
+}
+function renderPracticeOpts() {
+  buildOpts($('pPlayers'), [{ val: 3 }, { val: 4 }, { val: 5 }, { val: 6 }], function () { return pcfg.players; },
+    function (v) { pcfg.players = v; renderPracticeOpts(); }, function (v) { return v.val + '<small>' + Math.floor(60 / v.val) + ' rounds</small>'; });
+  buildOpts($('pLength'), [{ val: 'quick' }, { val: 'full' }], function () { return pcfg.length; },
+    function (v) { pcfg.length = v; renderPracticeOpts(); }, function (v) { return lengthLabel(pcfg.players, v.val); });
+  buildOpts($('pSkill'), [{ val: 'casual' }, { val: 'sharp' }], function () { return pcfg.skill; },
+    function (v) { pcfg.skill = v; renderPracticeOpts(); }, function (v) { return v.val === 'casual' ? 'Casual<small>loose bids</small>' : 'Sharp<small>counts cards</small>'; });
+}
+function renderHomeOpts() {
+  buildOpts($('homeLength'), [{ val: 'quick' }, { val: 'full' }], function () { return homeCfg.length; },
+    function (v) { homeCfg.length = v; renderHomeOpts(); }, function (v) { return lengthLabel(4, v.val); });
+}
+function renderLobbyOpts(onChange) {
+  buildOpts($('lobbyLength'), [{ val: 'quick' }, { val: 'full' }], function () { return homeCfg.length; },
+    function (v) { homeCfg.length = v; renderLobbyOpts(onChange); if (onChange) onChange(v); }, function (v) { return lengthLabel(4, v.val); });
+}
+App.renderLobbyOpts = renderLobbyOpts;
+
+/* ---------- static wiring ---------- */
+function wire() {
+  renderPracticeOpts(); renderHomeOpts();
+
+  // auth screen
+  $('practiceOnlyBtn').addEventListener('click', function () { hideAll(); show('setupSheet'); });
+  $('practiceBtn').addEventListener('click', function () { hideAll(); show('setupSheet'); });
+  $('cfgPracticeBtn').addEventListener('click', function () { hideAll(); show('setupSheet'); });
+
+  // practice setup
+  $('pStart').addEventListener('click', function () { startPractice({ players: pcfg.players, length: pcfg.length, skill: pcfg.skill }); });
+  $('pBack').addEventListener('click', goHomeOrAuth);
+
+  // home tabs
+  $('tabCreate').addEventListener('click', function () { setTab(true); });
+  $('tabJoin').addEventListener('click', function () { setTab(false); });
+  function setTab(create) {
+    $('tabCreate').setAttribute('aria-selected', String(create));
+    $('tabJoin').setAttribute('aria-selected', String(!create));
+    $('paneCreate').hidden = !create; $('paneJoin').hidden = create;
+  }
+
+  // menu
+  $('menuBtn').addEventListener('click', function () { show('menuSheet'); });
+  $('closeMenu').addEventListener('click', function () { $('menuSheet').hidden = true; });
+  $('leaveGame').addEventListener('click', function () { $('menuSheet').hidden = true; if (App.leave) App.leave(); });
+
+  // score / over advance (works for practice; online overrides via handlers set by module)
+  $('nextRound').addEventListener('click', function () { if (App.advance) App.advance(); });
+  $('playAgain').addEventListener('click', function () { if (App.advance) App.advance(); });
+  $('toHome').addEventListener('click', function () { $('overSheet').hidden = true; if (App.leave) App.leave(); else goHomeOrAuth(); });
+
+  // join code uppercasing
+  var jc = $('joinCode');
+  if (jc) jc.addEventListener('input', function () { jc.value = jc.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4); });
+}
+App.wire = wire;
+App.goHomeOrAuth = goHomeOrAuth;
+App.startPractice = startPractice;
+App.toast = toast;
+App.repaint = repaintLast;
+
+/* boot the static UI immediately; the module layer decides auth vs config */
+document.addEventListener('DOMContentLoaded', function () {
+  wire();
+  // default entry: if the module hasn't taken over within a tick, show auth (practice always available)
+});
+})();
+</script>
+<script type="module">/* ============================================================
+   ONLINE layer (ES module). The ONLY code that talks to Firebase.
+   Everything game-logical is delegated to window.WizardCore /
+   window.WizardHost, which are unit-tested. This file is deliberately
+   thin: auth, room docs, presence heartbeats, snapshot listeners, and
+   the host's persist-after-referee step.
+   ============================================================ */
+const FB_VERSION = '12.16.0';
+const G = 'https://www.gstatic.com/firebasejs/' + FB_VERSION + '/';
+
+const cfg = window.FIREBASE_CONFIG || {};
+const configured = cfg.apiKey && cfg.apiKey.indexOf('PASTE') !== 0;
+window.__wizardConfigured = configured;
+
+const Core = window.WizardCore, Host = window.WizardHost, App = window.App;
+
+if (!configured) {
+  // No backend wired up yet: show the setup card, but the whole app still
+  // runs in practice mode. Don't import Firebase at all.
+  App.showConfigNeeded();
+} else {
+  boot().catch(err => {
+    console.error(err);
+    const e = document.getElementById('authErr');
+    if (e) e.textContent = 'Could not reach Firebase: ' + (err && err.message || err);
+    App.showAuth(true);
+  });
+}
+
+async function boot() {
+  const [{ initializeApp }, authMod, fsMod] = await Promise.all([
+    import(G + 'firebase-app.js'),
+    import(G + 'firebase-auth.js'),
+    import(G + 'firebase-firestore.js')
+  ]);
+  const app = initializeApp(cfg);
+  const auth = authMod.getAuth(app);
+  const db = fsMod.getFirestore(app);
+  const F = fsMod; // shorthand for firestore functions
+
+  const state = {
+    uid: null, name: null, code: null,
+    unsubRoom: null, unsubHand: null, unsubMoves: null, unsubPresence: null,
+    room: null, myHand: [], presence: {}, presenceTimer: null, hostTimer: null,
+    lastPersistedRev: -1, applying: false
+  };
+
+  /* ---------------- auth ---------------- */
+  document.getElementById('googleBtn').addEventListener('click', async () => {
+    try {
+      const provider = new authMod.GoogleAuthProvider();
+      await authMod.signInWithPopup(auth, provider);
+    } catch (e) { showAuthErr(e); }
+  });
+  document.getElementById('guestBtn').addEventListener('click', async () => {
+    const nm = (document.getElementById('guestName').value || '').trim();
+    if (!nm) { showAuthErr({ message: 'Enter a name to play as a guest.' }); return; }
+    try {
+      state.pendingName = nm.slice(0, 16);
+      await authMod.signInAnonymously(auth);
+    } catch (e) { showAuthErr(e); }
+  });
+  document.getElementById('signOutBtn').addEventListener('click', async () => {
+    await leaveRoom();
+    await authMod.signOut(auth);
+  });
+  function showAuthErr(e) { const el = document.getElementById('authErr'); if (el) el.textContent = e && e.message || String(e); }
+
+  authMod.onAuthStateChanged(auth, (user) => {
+    if (user) {
+      state.uid = user.uid;
+      state.name = user.displayName || state.pendingName || 'Guest';
+      App.onSignedIn({ uid: user.uid, name: state.name });
+      maybeAutoJoinFromUrl();
+    } else {
+      state.uid = null;
+      App.onSignedOut();
+    }
+  });
+
+  /* ---------------- room helpers ---------------- */
+  const roomRef = code => F.doc(db, 'rooms', code);
+  const handRef = (code, uid) => F.doc(db, 'rooms', code, 'hands', uid);
+  const moveRef = (code, uid) => F.doc(db, 'rooms', code, 'moves', uid);
+  const presRef = (code, uid) => F.doc(db, 'rooms', code, 'present', uid);
+
+  function randomCode() {
+    const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; let s = '';
+    for (let i = 0; i < 4; i++) s += A[Math.floor(Math.random() * A.length)];
+    return s;
+  }
+
+  async function createRoom() {
+    const code = await pickFreeCode();
+    const seat = { uid: state.uid, name: state.name };
+    const room = {
+      code, hostUid: state.uid, status: 'lobby',
+      settings: { length: (window.__homeLength || 'quick') },
+      seats: [seat], scores: [0], round: 0, maxRounds: 0,
+      dealer: 0, leader: 0, turn: 0, trump: null, trumpCard: null, needTrump: false,
+      phase: 'lobby', bids: [null], tricksWon: [0], handCounts: [0],
+      trick: [], trickNo: 0, lastTrick: null, log: [], rev: 0,
+      turnStart: 0, createdAt: F.serverTimestamp()
+    };
+    await F.setDoc(roomRef(code), room);
+    await enterRoom(code);
+  }
+  async function pickFreeCode() {
+    for (let i = 0; i < 12; i++) {
+      const code = randomCode();
+      const snap = await F.getDoc(roomRef(code));
+      if (!snap.exists()) return code;
+    }
+    return randomCode() + Math.floor(Math.random() * 9);
+  }
+
+  async function joinRoom(code) {
+    const ref = roomRef(code);
+    const snap = await F.getDoc(ref);
+    if (!snap.exists()) throw new Error('No table with that code.');
+    const room = snap.data();
+    if (room.status !== 'lobby' && !room.seats.some(s => s.uid === state.uid)) throw new Error('That game has already started.');
+    if (room.seats.length >= 6 && !room.seats.some(s => s.uid === state.uid)) throw new Error('That table is full.');
+    if (!room.seats.some(s => s.uid === state.uid)) {
+      await F.runTransaction(db, async (tx) => {
+        const cur = await tx.get(ref);
+        const r = cur.data();
+        if (r.seats.some(s => s.uid === state.uid)) return;
+        if (r.status !== 'lobby') throw new Error('That game has already started.');
+        if (r.seats.length >= 6) throw new Error('That table is full.');
+        tx.update(ref, {
+          seats: [...r.seats, { uid: state.uid, name: state.name }],
+          scores: [...r.scores, 0], bids: [...r.bids, null],
+          tricksWon: [...r.tricksWon, 0], handCounts: [...r.handCounts, 0]
+        });
+      });
+    }
+    await enterRoom(code);
+  }
+
+  async function enterRoom(code) {
+    state.code = code;
+    startPresence(code);
+    // room listener
+    state.unsubRoom = F.onSnapshot(roomRef(code), (snap) => {
+      if (!snap.exists()) { App.toast('The table was closed.'); leaveRoom(); return; }
+      state.room = snap.data();
+      onRoom();
+    });
+    // my private hand
+    state.unsubHand = F.onSnapshot(handRef(code, state.uid), (snap) => {
+      state.myHand = snap.exists() ? (snap.data().cards || []) : [];
+      pushToApp();
+    });
+    // presence of everyone
+    state.unsubPresence = F.onSnapshot(F.collection(db, 'rooms', code, 'present'), (qs) => {
+      const now = Date.now(); const pres = {};
+      qs.forEach(d => { const t = d.data().t; pres[d.id] = t && (now - t.toMillis ? now - t.toMillis() : 0) < 15000; });
+      // simpler: mark present if heartbeat within 15s
+      const p2 = {};
+      qs.forEach(d => { const t = d.data().t; const ms = t && t.toMillis ? t.toMillis() : 0; p2[d.id] = (Date.now() - ms) < 15000; });
+      state.presence = p2;
+      pushToApp();
+    });
+  }
+
+  function startPresence(code) {
+    stopPresence();
+    const beat = () => F.setDoc(presRef(code, state.uid), { t: F.serverTimestamp() }).catch(() => {});
+    beat();
+    state.presenceTimer = setInterval(beat, 4000);
+    document.addEventListener('visibilitychange', beat);
+  }
+  function stopPresence() { if (state.presenceTimer) clearInterval(state.presenceTimer); state.presenceTimer = null; }
+
+  async function leaveRoom() {
+    if (!state.code) return;
+    const code = state.code;
+    [state.unsubRoom, state.unsubHand, state.unsubMoves, state.unsubPresence].forEach(u => u && u());
+    state.unsubRoom = state.unsubHand = state.unsubMoves = state.unsubPresence = null;
+    stopPresence();
+    if (state.hostTimer) { clearInterval(state.hostTimer); state.hostTimer = null; }
+    // best-effort: drop my presence and, if I'm a lobby member, my seat
+    try {
+      await F.deleteDoc(presRef(code, state.uid));
+      const snap = await F.getDoc(roomRef(code));
+      if (snap.exists()) {
+        const r = snap.data();
+        if (r.status === 'lobby' && r.seats.some(s => s.uid === state.uid)) {
+          if (r.seats.length <= 1) { await F.deleteDoc(roomRef(code)); }
+          else {
+            const idx = r.seats.findIndex(s => s.uid === state.uid);
+            const keep = (arr) => arr.filter((_, i) => i !== idx);
+            const patch = { seats: keep(r.seats), scores: keep(r.scores), bids: keep(r.bids), tricksWon: keep(r.tricksWon), handCounts: keep(r.handCounts) };
+            if (r.hostUid === state.uid) patch.hostUid = r.seats[idx === 0 ? 1 : 0].uid;
+            await F.updateDoc(roomRef(code), patch);
+          }
+        }
+      }
+    } catch (e) { /* ignore */ }
+    state.code = null; state.room = null; state.myHand = [];
+    App.toHome();
+  }
+
+  /* ---------------- reacting to room snapshots ---------------- */
+  function onRoom() {
+    const room = state.room;
+    if (room.status === 'lobby') {
+      App.renderLobby(room, state.uid, state.presence);
+      wireLobby(room);
+    } else {
+      pushToApp();
+    }
+    // host duties run on any snapshot; a timer also nudges for timeouts
+    if (room.hostUid === state.uid) {
+      ensureHostListeners();
+      runHostStep();
+    }
+  }
+
+  function pushToApp() {
+    if (!state.room || state.room.status === 'lobby') return;
+    App.online.net(net);
+    App.online.update(state.room, state.myHand, state.presence, state.uid);
+  }
+
+  /* ---------------- host referee ---------------- */
+  function ensureHostListeners() {
+    if (!state.unsubMoves) {
+      state.unsubMoves = F.onSnapshot(F.collection(db, 'rooms', state.code, 'moves'), () => runHostStep());
+    }
+    if (!state.hostTimer) {
+      state.hostTimer = setInterval(runHostStep, 1500); // catch turn timeouts
+    }
+  }
+
+  async function runHostStep() {
+    if (state.applying) return;
+    const room = state.room;
+    if (!room || room.status !== 'playing') return;
+    if (room.hostUid !== state.uid) return;
+    state.applying = true;
+    try {
+      // gather private hands (host is allowed to read all hands)
+      const handsSnap = await F.getDocs(F.collection(db, 'rooms', state.code, 'hands'));
+      const handsByUid = {}; handsSnap.forEach(d => handsByUid[d.id] = d.data().cards || []);
+      // gather pending moves
+      const movesSnap = await F.getDocs(F.collection(db, 'rooms', state.code, 'moves'));
+      const pending = {}; const moveDocs = {};
+      movesSnap.forEach(d => { pending[d.id] = d.data(); moveDocs[d.id] = d.data(); });
+
+      const s = Host.assemble(room, handsByUid);
+      s._turnStart = room.turnStart || 0;
+      const now = Date.now();
+      const presence = {};
+      state.room.seats.forEach(seat => { presence[seat.uid] = state.presence[seat.uid] ? now : 0; });
+
+      const next = Host.referee(s, pending, now, presence, { rng: Math.random, turnMs: 30000, presenceMs: 15000 });
+      if (!next) { state.applying = false; return; }
+
+      const parts = Host.disassemble(next);
+      const changedPhase = (s.phase + s.turn + s.trickNo) !== (next.phase + next.turn + next.trickNo);
+
+      // write hands that changed
+      const writes = [];
+      for (const uid in parts.hands) {
+        const before = JSON.stringify(handsByUid[uid] || []);
+        const after = JSON.stringify(parts.hands[uid] || []);
+        if (before !== after) writes.push(F.setDoc(handRef(state.code, uid), { cards: parts.hands[uid] }));
+      }
+      // room doc (single writer = host)
+      const roomPatch = Object.assign({}, parts.room, {
+        code: state.code, hostUid: room.hostUid, createdAt: room.createdAt,
+        turnStart: changedPhase ? now : (room.turnStart || now)
+      });
+      writes.push(F.setDoc(roomRef(state.code), roomPatch));
+      // clear consumed moves
+      const consumedSeat = Host.seatOnClock(s);
+      if (consumedSeat >= 0) { const uid = s.seats[consumedSeat].uid; if (moveDocs[uid]) writes.push(F.deleteDoc(moveRef(state.code, uid))); }
+      // clear any 'continue' moves
+      for (const uid in moveDocs) if (moveDocs[uid].type === 'continue') writes.push(F.deleteDoc(moveRef(state.code, uid)));
+
+      await Promise.all(writes);
+    } catch (e) {
+      console.error('host step failed', e);
+    } finally {
+      state.applying = false;
+    }
+  }
+
+  /* start the game from the lobby (host only) */
+  async function startGame() {
+    const room = state.room;
+    if (room.hostUid !== state.uid) return;
+    if (room.seats.length < 3) { App.toast('Need at least three players.'); return; }
+    const parts = Host.startFromLobby(room, Math.random);
+    // write each hand privately
+    const writes = [];
+    for (const uid in parts.hands) writes.push(F.setDoc(handRef(state.code, uid), { cards: parts.hands[uid] }));
+    const roomPatch = Object.assign({}, parts.room, {
+      code: state.code, hostUid: room.hostUid, createdAt: room.createdAt, turnStart: Date.now()
+    });
+    writes.push(F.setDoc(roomRef(state.code), roomPatch));
+    // clear any stale moves
+    const mv = await F.getDocs(F.collection(db, 'rooms', state.code, 'moves'));
+    mv.forEach(d => writes.push(F.deleteDoc(moveRef(state.code, d.id))));
+    await Promise.all(writes);
+  }
+
+  /* the net object handed to the app for submitting player actions */
+  const net = {
+    submit: async (mv) => {
+      try { await F.setDoc(moveRef(state.code, state.uid), { type: mv.type, value: mv.value, at: F.serverTimestamp() }); }
+      catch (e) { App.toast('Move failed — check connection.'); }
+    },
+    advance: async () => {
+      // host presses Next / Play again
+      const room = state.room;
+      if (!room || room.hostUid !== state.uid) return;
+      if (room.phase === 'gameover') {
+        // rematch: back to a fresh lobby with same seats
+        await F.updateDoc(roomRef(state.code), { status: 'lobby', phase: 'lobby', round: 0, log: [], trick: [], lastTrick: null,
+          scores: room.seats.map(() => 0), bids: room.seats.map(() => null), tricksWon: room.seats.map(() => 0), handCounts: room.seats.map(() => 0) });
+      } else {
+        await F.setDoc(moveRef(state.code, state.uid), { type: 'continue', at: F.serverTimestamp() });
+        runHostStep();
+      }
+    },
+    leave: () => leaveRoom()
+  };
+
+  /* ---------------- lobby wiring ---------------- */
+  let lobbyWired = false;
+  function wireLobby(room) {
+    // host length control
+    if (room.hostUid === state.uid) {
+      window.__homeLength = room.settings.length;
+      App.renderLobbyOpts(async (v) => { try { await F.updateDoc(roomRef(state.code), { 'settings.length': v.val }); } catch (e) {} });
+    }
+    if (lobbyWired) return; lobbyWired = true;
+    document.getElementById('startBtn').addEventListener('click', () => startGame());
+    document.getElementById('leaveRoomBtn').addEventListener('click', () => leaveRoom());
+    document.getElementById('copyCodeBtn').addEventListener('click', () => {
+      const url = location.origin + location.pathname + '#' + state.code;
+      navigator.clipboard && navigator.clipboard.writeText(url).then(() => App.toast('Invite link copied'), () => App.toast(state.code));
+    });
+  }
+
+  /* ---------------- home wiring ---------------- */
+  document.getElementById('createBtn').addEventListener('click', async () => {
+    window.__homeLength = readHomeLength();
+    try { await createRoom(); } catch (e) { App.toast(e.message || 'Could not create table.'); }
+  });
+  document.getElementById('joinBtn').addEventListener('click', async () => {
+    const code = (document.getElementById('joinCode').value || '').toUpperCase();
+    const err = document.getElementById('joinErr'); err.textContent = '';
+    if (code.length !== 4) { err.textContent = 'Codes are four letters.'; return; }
+    try { await joinRoom(code); } catch (e) { err.textContent = e.message || 'Could not join.'; }
+  });
+  function readHomeLength() {
+    const b = document.querySelector('#homeLength .opt[aria-pressed="true"]');
+    return b && b.textContent.indexOf('Full') === 0 ? 'full' : 'quick';
+  }
+
+  /* deep-link join via #CODE */
+  function maybeAutoJoinFromUrl() {
+    const h = (location.hash || '').replace('#', '').toUpperCase();
+    if (/^[A-Z]{4}$/.test(h) && state.uid && !state.code) {
+      joinRoom(h).catch(e => App.toast(e.message || 'Could not join from link.'));
+      history.replaceState(null, '', location.pathname);
+    }
+  }
+
+  /* let the app's advance buttons route to the host in online mode */
+  const origAdvance = App.advance;
+  App.advance = function () { if (state.code && state.room && state.room.status !== 'lobby') net.advance(); else if (origAdvance) origAdvance(); };
+  App.leave = function () { if (state.code) leaveRoom(); else App.goHomeOrAuth(); };
+}
+</script>
+</body>
+</html>
