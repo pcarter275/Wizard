@@ -50,6 +50,7 @@ body{background:radial-gradient(120% 78% at 50% 34%,#3A2545 0%,#2A1B33 46%,#170D
 .bidmark{position:absolute;top:5px;right:7px;font:400 15px/1 var(--num);color:var(--brass);display:flex;align-items:baseline;gap:3px}
 .bidmark span{font-size:8px;letter-spacing:.14em;text-transform:uppercase;color:rgba(212,169,60,.7)}
 .bidmark.pend{color:rgba(244,236,216,.3);font-size:13px}
+.bidmark.lock{color:var(--teal);font-size:14px}
 .dealerdot{position:absolute;bottom:6px;right:7px;font:400 8px/1 var(--num);letter-spacing:.1em;color:rgba(244,236,216,.45)}
 .waitdot{position:absolute;top:7px;right:8px;width:6px;height:6px;border-radius:50%;background:var(--brass);
   animation:blink 1s steps(2) infinite}
@@ -250,6 +251,8 @@ td.delta{width:52px}
       <div id="paneCreate">
         <div class="field"><div class="lab">Rounds</div>
           <div class="opts" id="homeLength"></div></div>
+        <div class="field"><div class="lab">Bidding</div>
+          <div class="opts" id="homeBid"></div></div>
         <button class="btn" id="createBtn" type="button">Open a table</button>
         <div class="hint">You'll get a four-letter code to share. Others join, you deal.</div>
       </div>
@@ -277,6 +280,7 @@ td.delta{width:52px}
       <div id="lobbyPlayers"></div>
       <div id="hostControls" hidden>
         <div class="field"><div class="lab">Rounds</div><div class="opts" id="lobbyLength"></div></div>
+        <div class="field"><div class="lab">Bidding</div><div class="opts" id="lobbyBid"></div></div>
         <button class="btn" id="startBtn" type="button" disabled>Deal the first round</button>
         <div class="hint" id="startHint">Need at least three players.</div>
       </div>
@@ -314,6 +318,7 @@ td.delta{width:52px}
       <h2>Set the table</h2>
       <div class="field"><div class="lab">Players</div><div class="opts" id="pPlayers"></div></div>
       <div class="field"><div class="lab">Rounds</div><div class="opts" id="pLength"></div></div>
+      <div class="field"><div class="lab">Bidding</div><div class="opts" id="pBid"></div></div>
       <div class="field"><div class="lab">Opponents</div><div class="opts" id="pSkill"></div></div>
       <button class="btn" id="pStart" type="button">Deal</button>
       <div class="row2"><button class="btn ghost" id="pBack" type="button">Back</button></div>
@@ -452,16 +457,18 @@ function maxRoundsFor(nPlayers, length) {
   var full = Math.floor(60 / nPlayers);
   return length === 'quick' ? Math.min(7, full) : full;
 }
-function createGame(seats, length) {
+function createGame(seats, length, bidStyle) {
   var n = seats.length;
   return {
-    status: 'playing', length: length, seats: seats.slice(), nPlayers: n,
+    status: 'playing', length: length, bidStyle: bidStyle === 'simultaneous' ? 'simultaneous' : 'sequential',
+    seats: seats.slice(), nPlayers: n,
     scores: seats.map(function () { return 0; }),
     round: 0, maxRounds: maxRoundsFor(n, length),
     dealer: Math.floor(Math.random() * n), leader: 0, turn: 0,
     trump: null, trumpCard: null, needTrump: false,
     phase: 'roundstart',
     bids: seats.map(function () { return null; }),
+    bidsIn: seats.map(function () { return false; }),
     tricksWon: seats.map(function () { return 0; }),
     hands: seats.map(function () { return []; }),
     handCounts: seats.map(function () { return 0; }),
@@ -470,11 +477,12 @@ function createGame(seats, length) {
 }
 function clone(s) {
   return {
-    status: s.status, length: s.length, seats: s.seats, nPlayers: s.nPlayers,
+    status: s.status, length: s.length, bidStyle: s.bidStyle, seats: s.seats, nPlayers: s.nPlayers,
     scores: s.scores.slice(), round: s.round, maxRounds: s.maxRounds,
     dealer: s.dealer, leader: s.leader, turn: s.turn,
     trump: s.trump, trumpCard: s.trumpCard, needTrump: s.needTrump, phase: s.phase,
-    bids: s.bids.slice(), tricksWon: s.tricksWon.slice(),
+    bids: s.bids.slice(), bidsIn: (s.bidsIn || s.seats.map(function () { return false; })).slice(),
+    tricksWon: s.tricksWon.slice(),
     hands: s.hands.map(function (h) { return h.slice(); }),
     handCounts: s.handCounts.slice(),
     trick: s.trick.slice(), trickNo: s.trickNo, lastTrick: s.lastTrick,
@@ -498,6 +506,7 @@ function beginRound(state, rng) {
   s.leader = (s.dealer + 1) % n;
   s.turn = s.leader;
   s.bids = s.seats.map(function () { return null; });
+  s.bidsIn = s.seats.map(function () { return false; });
   s.tricksWon = s.seats.map(function () { return 0; });
   s.trick = []; s.trickNo = 0; s.lastTrick = null;
   s.phase = s.needTrump ? 'trumpselect' : 'bidding';
@@ -518,7 +527,11 @@ function moveError(s, mv) {
   }
   if (s.phase === 'bidding') {
     if (mv.type !== 'bid') return 'awaiting a bid';
-    if (mv.seat !== s.turn) return 'not your turn to bid';
+    if (s.bidStyle === 'simultaneous') {
+      if (s.bids[mv.seat] !== null) return 'already bid';
+    } else {
+      if (mv.seat !== s.turn) return 'not your turn to bid';
+    }
     if (!(mv.value >= 0 && mv.value <= s.round)) return 'bid out of range';
     return null;
   }
@@ -557,8 +570,14 @@ function applyMove(state, mv) {
   }
   if (s.phase === 'bidding') {
     s.bids[mv.seat] = mv.value;
-    if (mv.seat === s.dealer) { s.phase = 'playing'; s.turn = s.leader; }
-    else s.turn = nextSeat(s, mv.seat);
+    s.bidsIn[mv.seat] = true;
+    if (s.bidStyle === 'simultaneous') {
+      if (s.bids.every(function (b) { return b !== null; })) { s.phase = 'playing'; s.turn = s.leader; }
+      // otherwise stay in bidding; there is no per-seat turn
+    } else {
+      if (mv.seat === s.dealer) { s.phase = 'playing'; s.turn = s.leader; }
+      else s.turn = nextSeat(s, mv.seat);
+    }
     s.rev++;
     return s;
   }
@@ -596,7 +615,10 @@ function applyMove(state, mv) {
 /* default action for a timed-out / disconnected seat */
 function autoMove(s, seat) {
   if (s.phase === 'trumpselect' && seat === s.dealer) return { type: 'trump', seat: seat, value: bestSuitFor(s.hands[seat]) };
-  if (s.phase === 'bidding' && seat === s.turn) return { type: 'bid', seat: seat, value: aiBid(s.hands[seat], s.trump, s.nPlayers, s.round, 'sharp') };
+  if (s.phase === 'bidding') {
+    var canBid = s.bidStyle === 'simultaneous' ? s.bids[seat] === null : seat === s.turn;
+    if (canBid) return { type: 'bid', seat: seat, value: aiBid(s.hands[seat], s.trump, s.nPlayers, s.round, 'sharp') };
+  }
   if (s.phase === 'playing' && seat === s.turn) {
     var c = aiCard(s.hands[seat], s.trick, s.trump, s.bids[seat], s.tricksWon[seat], s.nPlayers, 'sharp');
     return { type: 'play', seat: seat, value: c.id };
@@ -641,8 +663,10 @@ function assemble(room, handsByUid) {
     scores: room.scores.slice(), round: room.round, maxRounds: room.maxRounds,
     dealer: room.dealer, leader: room.leader, turn: room.turn,
     trump: room.trump, trumpCard: room.trumpCard, needTrump: room.needTrump,
-    phase: room.phase,
-    bids: room.bids.slice(), tricksWon: room.tricksWon.slice(),
+    phase: room.phase, bidStyle: room.bidStyle || 'sequential',
+    bids: room.bids.slice(),
+    bidsIn: (room.bidsIn || room.seats.map(function () { return false; })).slice(),
+    tricksWon: room.tricksWon.slice(),
     hands: room.seats.map(function (st) { return (handsByUid[st.uid] || []).slice(); }),
     handCounts: room.handCounts.slice(),
     trick: room.trick.slice(), trickNo: room.trickNo, lastTrick: room.lastTrick,
@@ -651,17 +675,24 @@ function assemble(room, handsByUid) {
   return s;
 }
 
-/* Split a pure-core state back into { room, hands } for persistence. */
+/* Split a pure-core state back into { room, hands } for persistence.
+   During simultaneous bidding the individual bid VALUES stay secret — the
+   public room carries only which seats have locked in (bidsIn), never the
+   numbers — until the reveal (phase becomes 'playing'). */
 function disassemble(s) {
   var hands = {};
   s.seats.forEach(function (st, i) { hands[st.uid] = s.hands[i]; });
+  var hideBids = (s.phase === 'bidding' && s.bidStyle === 'simultaneous');
+  var publicBids = hideBids ? s.bids.map(function () { return null; }) : s.bids;
   var room = {
     status: s.phase === 'gameover' ? 'done' : 'playing',
-    settings: { length: s.length }, seats: s.seats,
+    settings: { length: s.length, bidStyle: s.bidStyle }, seats: s.seats,
     scores: s.scores, round: s.round, maxRounds: s.maxRounds,
     dealer: s.dealer, leader: s.leader, turn: s.turn,
     trump: s.trump, trumpCard: s.trumpCard, needTrump: s.needTrump,
-    phase: s.phase, bids: s.bids, tricksWon: s.tricksWon,
+    phase: s.phase, bidStyle: s.bidStyle, bids: publicBids,
+    bidsIn: (s.bidsIn || s.seats.map(function () { return false; })).slice(),
+    tricksWon: s.tricksWon,
     handCounts: s.handCounts, trick: s.trick, trickNo: s.trickNo,
     lastTrick: s.lastTrick, log: s.log, rev: s.rev
   };
@@ -689,6 +720,37 @@ function referee(state, pendingByUid, now, presence, opts) {
     return null;
   }
   if (state.phase === 'gameover') return null;
+
+  /* Simultaneous (blind) bidding: gather every seat's secret bid from their
+     pending move, keeping the public room showing only who has locked in.
+     Reveal — flip to playing with all bids at once — when everyone is in
+     (or the shared clock runs out, in which case absentees are auto-bid). */
+  if (state.phase === 'bidding' && state.bidStyle === 'simultaneous') {
+    var work = Core.clone(state);
+    var changed = false, i, uid2, m;
+    for (i = 0; i < work.nPlayers; i++) {
+      if (work.bids[i] === null) {
+        uid2 = work.seats[i].uid; m = pendingByUid[uid2];
+        if (m && m.type === 'bid' && m.value >= 0 && m.value <= work.round) {
+          work.bids[i] = m.value; work.bidsIn[i] = true; changed = true;
+        }
+      }
+    }
+    var dl = state._turnStart ? state._turnStart + turnMs : null;
+    var timedOut = dl && now >= dl;
+    var presenceMs = opts.presenceMs || 12000;
+    for (i = 0; i < work.nPlayers; i++) if (work.bids[i] === null) {
+      var u3 = work.seats[i].uid;
+      var absent = presence && (!presence[u3] || now - presence[u3] > presenceMs);
+      if (timedOut || absent) {
+        work.bids[i] = Core.aiBid(work.hands[i], work.trump, work.nPlayers, work.round, 'sharp');
+        work.bidsIn[i] = true; changed = true;
+      }
+    }
+    if (work.bids.every(function (b) { return b !== null; })) { work.phase = 'playing'; work.turn = work.leader; work.rev++; return work; }
+    if (changed) { work.rev++; return work; }
+    return null;
+  }
 
   var seat = seatOnClock(state);
   if (seat < 0) return null;
@@ -718,7 +780,7 @@ function anyMove(byUid, type) {
 
 /* Start a fresh game from a lobby: seats in join order, host deals round 1. */
 function startFromLobby(room, rng) {
-  var g = Core.createGame(room.seats, room.settings.length);
+  var g = Core.createGame(room.seats, room.settings.length, (room.settings.bidStyle || 'sequential'));
   g.dealer = Math.floor((rng || Math.random)() * g.nPlayers);
   g = Core.beginRound(g, rng);
   return disassemble(g);
@@ -776,27 +838,35 @@ function cardEl(c) {
 function backEl() { var d = document.createElement('div'); d.className = 'card back'; return d; }
 
 /* ---------- board ---------- */
-function renderRail(v, mySeat, presence) {
+function renderRail(v, mySeat, presence, myBid) {
   var el = $('rail'); el.innerHTML = '';
+  var blind = (v.phase === 'bidding' && v.bidStyle === 'simultaneous');
   v.seats.forEach(function (p, i) {
     var d = document.createElement('div');
     var bid = v.bids[i], tricks = v.tricksWon[i];
     var off = presence && presence[p.uid] === false;
-    d.className = 'seat' + (i === v.turn && (v.phase === 'bidding' || v.phase === 'playing') ? ' turn' : '') +
+    d.className = 'seat' + (i === v.turn && (v.phase === 'bidding' || v.phase === 'playing') && !blind ? ' turn' : '') +
       (i === mySeat ? ' me' : '') + (off ? ' off' : '') +
       (bid !== null && tricks === bid ? ' exact' : '') + (bid !== null && tricks > bid ? ' bust' : '');
     var pips = '';
-    if (bid !== null) {
+    if (bid !== null && !blind) {
       var won = Math.min(tricks, bid), over = Math.max(0, tricks - bid), empty = Math.max(0, bid - tricks), k;
       for (k = 0; k < won; k++) pips += '<i class="pip won"></i>';
       for (k = 0; k < over; k++) pips += '<i class="pip over"></i>';
       for (k = 0; k < empty; k++) pips += '<i class="pip"></i>';
     }
-    var waiting = (v.phase === 'bidding' || v.phase === 'playing') && i === v.turn;
     var badge = '';
-    if (bid !== null) badge = '<div class="bidmark"><span>bid</span>' + bid + '</div>';
-    else if (v.phase === 'bidding') badge = '<div class="bidmark pend">·</div>';
-    d.innerHTML = '<div class="who">' + esc(p.name) + (i === mySeat ? ' ·' : '') + '</div>' +
+    if (blind) {
+      if (i === mySeat && myBid != null) badge = '<div class="bidmark"><span>bid</span>' + myBid + '</div>';
+      else if (v.bidsIn && v.bidsIn[i]) badge = '<div class="bidmark lock">\u2713</div>';
+      else badge = '<div class="bidmark pend">\u00b7</div>';
+    } else if (bid !== null) {
+      badge = '<div class="bidmark"><span>bid</span>' + bid + '</div>';
+    } else if (v.phase === 'bidding') {
+      badge = '<div class="bidmark pend">\u00b7</div>';
+    }
+    var waiting = (v.phase === 'bidding' || v.phase === 'playing') && i === v.turn && !blind;
+    d.innerHTML = '<div class="who">' + esc(p.name) + (i === mySeat ? ' \u00b7' : '') + '</div>' +
       '<div class="tot">' + v.scores[i] + '</div><div class="pips">' + pips + '</div>' + badge +
       (i === v.dealer ? '<div class="dealerdot">DEALS</div>' : '') +
       (waiting ? '<div class="waitdot"></div>' : '');
@@ -867,8 +937,8 @@ function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&
 function setMsg(t) { $('msg').textContent = t; }
 
 /* ---------- bid / trump input ---------- */
-function openBid(maxBid, hint, onBid) {
-  $('bidTitle').textContent = 'Your bid'; $('bidHint').textContent = hint;
+function openBid(maxBid, hint, onBid, blind) {
+  $('bidTitle').textContent = blind ? 'Your secret bid' : 'Your bid'; $('bidHint').textContent = hint;
   var box = $('bidNums'); box.innerHTML = '';
   for (var i = 0; i <= maxBid; i++) (function (val) {
     var b = document.createElement('button'); b.className = 'num'; b.type = 'button'; b.textContent = val;
@@ -930,7 +1000,7 @@ function showOver(v, iface) {
 var current = { v: null, iface: null };
 function paint(v, iface) {
   current.v = v; current.iface = iface;
-  renderTrump(v); renderRail(v, iface.mySeat, iface.presence); renderTrick(v);
+  renderTrump(v); renderRail(v, iface.mySeat, iface.presence, iface.myBid); renderTrick(v);
   renderHand(v, iface.mySeat, iface.myHand || [], iface.canPlay, iface.onPlay || function () {});
 
   // sheets driven by phase
@@ -943,7 +1013,16 @@ function paint(v, iface) {
   } else { $('trumpPanel').hidden = true; }
 
   if (v.phase === 'bidding') {
-    if (iface.canBid) {
+    if (v.bidStyle === 'simultaneous') {
+      var inCount = (v.bidsIn || []).filter(Boolean).length;
+      if (iface.canBid && iface.myBid == null) {
+        setMsg('Everyone bids at once — choose in secret.');
+        openBid(v.round, 'No peeking — ' + inCount + ' of ' + v.nPlayers + ' locked in.', iface.onBid, true);
+      } else {
+        $('bidPanel').hidden = true;
+        setMsg('Bid locked in secret · ' + inCount + ' of ' + v.nPlayers + ' ready…');
+      }
+    } else if (iface.canBid) {
       var claimed = v.bids.reduce(function (s, b) { return s + (b || 0); }, 0);
       var before = v.bids.filter(function (b) { return b !== null; }).length;
       setMsg('Name the tricks you will take.');
@@ -970,14 +1049,14 @@ function startPractice(cfg) {
   var seats = [{ uid: 'me', name: 'You' }];
   var NAMES = ['Ada', 'Bram', 'Cleo', 'Dorn', 'Esme'];
   for (var i = 1; i < cfg.players; i++) seats.push({ uid: 'ai' + i, name: NAMES[i - 1] });
-  var s = Core.createGame(seats, cfg.length);
+  var s = Core.createGame(seats, cfg.length, cfg.bidStyle || 'sequential');
   s.dealer = Math.floor(Math.random() * cfg.players);
   s = Core.beginRound(s);
   var skill = cfg.skill;
 
   function iface(extra) {
     return Object.assign({
-      mySeat: 0, myHand: s.hands[0], presence: null,
+      mySeat: 0, myHand: s.hands[0], presence: null, myBid: s.bids[0],
       myTurn: s.turn === 0, canBid: false, canPlay: false, canTrump: false, canAdvance: false,
       onBid: function (v) { step({ type: 'bid', seat: 0, value: v }); },
       onPlay: function (c) { step({ type: 'play', seat: 0, value: c.id }); },
@@ -986,30 +1065,45 @@ function startPractice(cfg) {
   }
   function render() {
     var canTrump = s.phase === 'trumpselect' && s.dealer === 0;
-    var canBid = s.phase === 'bidding' && s.turn === 0;
+    var canBid = s.phase === 'bidding' && (s.bidStyle === 'simultaneous' ? s.bids[0] === null : s.turn === 0);
     var canPlay = s.phase === 'playing' && s.turn === 0;
     paint(s, iface({ canTrump: canTrump, canBid: canBid, canPlay: canPlay, canAdvance: s.phase === 'roundend' || s.phase === 'gameover' }));
   }
   function step(mv) {
+    var wasBlind = s.phase === 'bidding' && s.bidStyle === 'simultaneous';
     var err = Core.moveError(s, mv); if (err) { toast(err); return; }
-    s = Core.applyMove(s, mv); render(); pump();
+    s = Core.applyMove(s, mv); render();
+    if (wasBlind && s.phase === 'playing') { // the reveal — let bids sit a beat before play
+      setMsg('Bids are in — ' + s.seats[s.leader].name + ' leads.');
+      clearTimeout(localTimer); localTimer = setTimeout(pump, 1500); return;
+    }
+    pump();
   }
   function pump() {
     clearTimeout(localTimer);
     if (s.phase === 'gameover') return;
     if (s.phase === 'roundend') return; // wait for Next click
-    var seat = s.phase === 'trumpselect' ? s.dealer : s.turn;
-    if (seat === 0) return; // human's move
+    // blind bidding: the AI locks in secretly, then we wait for the human
+    if (s.phase === 'bidding' && s.bidStyle === 'simultaneous') {
+      var applied = false;
+      for (var seat = 1; seat < s.nPlayers; seat++) if (s.bids[seat] === null) {
+        s = Core.applyMove(s, { type: 'bid', seat: seat, value: Core.aiBid(s.hands[seat], s.trump, s.nPlayers, s.round, skill) });
+        applied = true;
+      }
+      if (applied) render();
+      if (s.phase === 'bidding') return; // still waiting on the human's secret bid
+    }
+    var seat2 = s.phase === 'trumpselect' ? s.dealer : s.turn;
+    if (seat2 === 0) return; // human's move
     var delay = s.phase === 'playing' ? 620 : 480;
     localTimer = setTimeout(function () {
       var mv;
-      if (s.phase === 'trumpselect') mv = { type: 'trump', seat: seat, value: Core.bestSuitFor(s.hands[seat]) };
-      else if (s.phase === 'bidding') { mv = { type: 'bid', seat: seat, value: Core.aiBid(s.hands[seat], s.trump, s.nPlayers, s.round, skill) }; toast(s.seats[seat].name + ' bids ' + mv.value); }
-      else { var c = Core.aiCard(s.hands[seat], s.trick, s.trump, s.bids[seat], s.tricksWon[seat], s.nPlayers, skill); mv = { type: 'play', seat: seat, value: c.id }; }
+      if (s.phase === 'trumpselect') mv = { type: 'trump', seat: seat2, value: Core.bestSuitFor(s.hands[seat2]) };
+      else if (s.phase === 'bidding') { mv = { type: 'bid', seat: seat2, value: Core.aiBid(s.hands[seat2], s.trump, s.nPlayers, s.round, skill) }; toast(s.seats[seat2].name + ' bids ' + mv.value); }
+      else { var c = Core.aiCard(s.hands[seat2], s.trick, s.trump, s.bids[seat2], s.tricksWon[seat2], s.nPlayers, skill); mv = { type: 'play', seat: seat2, value: c.id }; }
       s = Core.applyMove(s, mv);
       render();
       if (s.phase === 'playing' && s.trick.length === 0 && s.lastTrick) {
-        // let the completed trick sit a beat before the next lead
         clearTimeout(localTimer);
         localTimer = setTimeout(pump, 900);
       } else pump();
@@ -1025,13 +1119,14 @@ function startPractice(cfg) {
    The module owns Firebase; it hands us a `net` object and pushes
    room/hand snapshots at us via App.online.update().
    ============================================================ */
-var online = { net: null, room: null, myUid: null, myHand: [], presence: {} };
+var online = { net: null, room: null, myUid: null, myHand: [], presence: {}, myBid: null };
+var wasBlindBidding = false;
 App_registerOnline();
 function App_registerOnline() {
   App.online = {
     update: function (room, myHand, presence, myUid) {
       online.room = room; online.myHand = myHand || []; online.presence = presence || {}; online.myUid = myUid;
-      if (!room || room.status === 'lobby') { lastRenderSig = null; lastBids = null; prevTrickIds = []; return; }
+      if (!room || room.status === 'lobby') { lastRenderSig = null; lastBids = null; prevTrickIds = []; online.myBid = null; wasBlindBidding = false; return; }
       renderOnline();
     },
     net: function (net) { online.net = net; }
@@ -1040,7 +1135,7 @@ function App_registerOnline() {
 var lastRenderSig = null, lastBids = null;
 function roomSignature(room, myHand) {
   return [room.rev, room.status, room.phase, room.turn, room.dealer, room.trump, room.round,
-    room.bids.join(','), room.tricksWon.join(','), room.scores.join(','),
+    room.bids.join(','), (room.bidsIn || []).join(','), room.tricksWon.join(','), room.scores.join(','),
     room.trick.map(function (t) { return t.seat + t.card.id; }).join(','),
     room.lastTrick ? room.lastTrick.winner + room.lastTrick.cards.map(function (c) { return c.card.id; }).join('') : '',
     (myHand || []).map(function (c) { return c.id; }).join(',')
@@ -1054,7 +1149,8 @@ function applyPresence(pres, seats) {
   });
 }
 function announceBids(room, mySeat) {
-  if (lastBids && room.phase === 'bidding') {
+  // sequential only: in blind mode bids are secret until the shared reveal
+  if (lastBids && room.phase === 'bidding' && (room.bidStyle || 'sequential') !== 'simultaneous') {
     for (var i = 0; i < room.bids.length; i++) {
       if (lastBids[i] === null && room.bids[i] !== null && i !== mySeat) {
         toast(room.seats[i].name + ' bids ' + room.bids[i]);
@@ -1079,14 +1175,25 @@ function renderOnline() {
   lastRenderSig = sig;
 
   var v = Host.assemble(room, keyById(room.seats, online.myHand, online.myUid));
+  var blind = v.phase === 'bidding' && v.bidStyle === 'simultaneous';
+  if (v.phase !== 'bidding') online.myBid = null;         // clear my secret at reveal / new round
+  var iBid = (online.myBid != null) || (blind && v.bidsIn && v.bidsIn[mySeat]);
+  // announce the reveal once, when blind bids flip to play
+  if (wasBlindBidding && v.phase === 'playing') toast('Bids revealed');
+  wasBlindBidding = blind;
+
   paint(v, {
-    mySeat: mySeat, myHand: online.myHand, presence: pres,
+    mySeat: mySeat, myHand: online.myHand, presence: pres, myBid: online.myBid,
     myTurn: v.phase === 'playing' && v.turn === mySeat,
-    canBid: v.phase === 'bidding' && v.turn === mySeat,
+    canBid: v.phase === 'bidding' && (blind ? !iBid : v.turn === mySeat),
     canPlay: v.phase === 'playing' && v.turn === mySeat,
     canTrump: v.phase === 'trumpselect' && v.dealer === mySeat,
     canAdvance: isHost,
-    onBid: function (val) { online.net.submit({ type: 'bid', value: val }); $('bidPanel').hidden = true; setMsg('Bid in.'); },
+    onBid: function (val) {
+      if (blind) online.myBid = val;
+      online.net.submit({ type: 'bid', value: val }); $('bidPanel').hidden = true;
+      setMsg(blind ? 'Bid locked in secret.' : 'Bid in.');
+    },
     onPlay: function (c) { online.net.submit({ type: 'play', value: c.id }); },
     onTrump: function (k) { online.net.submit({ type: 'trump', value: k }); $('trumpPanel').hidden = true; }
   });
@@ -1149,8 +1256,8 @@ App.toHome = function () { renderHome(); };
 App.toLobby = function () { /* handled by renderLobby via snapshots */ };
 
 /* option builders */
-var pcfg = { players: 4, length: 'quick', skill: 'sharp' };
-var homeCfg = { length: 'quick' };
+var pcfg = { players: 4, length: 'quick', skill: 'sharp', bidStyle: 'simultaneous' };
+var homeCfg = { length: 'quick', bidStyle: 'simultaneous' };
 function buildOpts(host, list, get, set, render) {
   host.innerHTML = '';
   list.forEach(function (v) {
@@ -1164,21 +1271,31 @@ function lengthLabel(players, val) {
   var full = Math.floor(60 / players);
   return val === 'quick' ? 'Short<small>' + Math.min(7, full) + ' rounds</small>' : 'Full<small>' + full + ' rounds</small>';
 }
+function bidLabel(val) {
+  return val === 'simultaneous' ? 'All at once<small>secret &amp; blind</small>' : 'In turn<small>one by one</small>';
+}
+var BID_OPTS = [{ val: 'simultaneous' }, { val: 'sequential' }];
 function renderPracticeOpts() {
   buildOpts($('pPlayers'), [{ val: 3 }, { val: 4 }, { val: 5 }, { val: 6 }], function () { return pcfg.players; },
     function (v) { pcfg.players = v; renderPracticeOpts(); }, function (v) { return v.val + '<small>' + Math.floor(60 / v.val) + ' rounds</small>'; });
   buildOpts($('pLength'), [{ val: 'quick' }, { val: 'full' }], function () { return pcfg.length; },
     function (v) { pcfg.length = v; renderPracticeOpts(); }, function (v) { return lengthLabel(pcfg.players, v.val); });
+  buildOpts($('pBid'), BID_OPTS, function () { return pcfg.bidStyle; },
+    function (v) { pcfg.bidStyle = v; renderPracticeOpts(); }, function (v) { return bidLabel(v.val); });
   buildOpts($('pSkill'), [{ val: 'casual' }, { val: 'sharp' }], function () { return pcfg.skill; },
     function (v) { pcfg.skill = v; renderPracticeOpts(); }, function (v) { return v.val === 'casual' ? 'Casual<small>loose bids</small>' : 'Sharp<small>counts cards</small>'; });
 }
 function renderHomeOpts() {
   buildOpts($('homeLength'), [{ val: 'quick' }, { val: 'full' }], function () { return homeCfg.length; },
     function (v) { homeCfg.length = v; renderHomeOpts(); }, function (v) { return lengthLabel(4, v.val); });
+  buildOpts($('homeBid'), BID_OPTS, function () { return homeCfg.bidStyle; },
+    function (v) { homeCfg.bidStyle = v; renderHomeOpts(); }, function (v) { return bidLabel(v.val); });
 }
-function renderLobbyOpts(onChange) {
+function renderLobbyOpts(onLength, onBid) {
   buildOpts($('lobbyLength'), [{ val: 'quick' }, { val: 'full' }], function () { return homeCfg.length; },
-    function (v) { homeCfg.length = v; renderLobbyOpts(onChange); if (onChange) onChange(v); }, function (v) { return lengthLabel(4, v.val); });
+    function (v) { homeCfg.length = v; renderLobbyOpts(onLength, onBid); if (onLength) onLength(v); }, function (v) { return lengthLabel(4, v.val); });
+  buildOpts($('lobbyBid'), BID_OPTS, function () { return homeCfg.bidStyle; },
+    function (v) { homeCfg.bidStyle = v; renderLobbyOpts(onLength, onBid); if (onBid) onBid(v); }, function (v) { return bidLabel(v.val); });
 }
 App.renderLobbyOpts = renderLobbyOpts;
 
@@ -1192,7 +1309,7 @@ function wire() {
   $('cfgPracticeBtn').addEventListener('click', function () { hideAll(); show('setupSheet'); });
 
   // practice setup
-  $('pStart').addEventListener('click', function () { startPractice({ players: pcfg.players, length: pcfg.length, skill: pcfg.skill }); });
+  $('pStart').addEventListener('click', function () { startPractice({ players: pcfg.players, length: pcfg.length, skill: pcfg.skill, bidStyle: pcfg.bidStyle }); });
   $('pBack').addEventListener('click', goHomeOrAuth);
 
   // home tabs
@@ -1328,7 +1445,7 @@ async function boot() {
     const seat = { uid: state.uid, name: state.name };
     const room = {
       code, hostUid: state.uid, status: 'lobby',
-      settings: { length: (window.__homeLength || 'quick') },
+      settings: { length: (window.__homeLength || 'quick'), bidStyle: (window.__homeBid || 'simultaneous') },
       seats: [seat], scores: [0], round: 0, maxRounds: 0,
       dealer: 0, leader: 0, turn: 0, trump: null, trumpCard: null, needTrump: false,
       phase: 'lobby', bids: [null], tricksWon: [0], handCounts: [0],
@@ -1507,9 +1624,19 @@ async function boot() {
         turnStart: changedPhase ? now : (room.turnStart || now)
       });
       writes.push(F.setDoc(roomRef(state.code), roomPatch));
-      // clear consumed moves
-      const consumedSeat = Host.seatOnClock(s);
-      if (consumedSeat >= 0) { const uid = s.seats[consumedSeat].uid; if (moveDocs[uid]) writes.push(F.deleteDoc(moveRef(state.code, uid))); }
+      // Move cleanup. During blind bidding the secret bid moves are the
+      // accumulator — keep them until the reveal (phase flips to playing),
+      // then delete them all. Otherwise clear the consumed move as usual.
+      const wasBlindBid = s.phase === 'bidding' && (s.bidStyle === 'simultaneous');
+      if (wasBlindBid) {
+        if (next.phase === 'playing') {
+          for (const uid in moveDocs) if (moveDocs[uid].type === 'bid') writes.push(F.deleteDoc(moveRef(state.code, uid)));
+        }
+        // else: partial progress — keep every secret bid in place
+      } else {
+        const consumedSeat = Host.seatOnClock(s);
+        if (consumedSeat >= 0) { const uid = s.seats[consumedSeat].uid; if (moveDocs[uid]) writes.push(F.deleteDoc(moveRef(state.code, uid))); }
+      }
       // clear any 'continue' moves
       for (const uid in moveDocs) if (moveDocs[uid].type === 'continue') writes.push(F.deleteDoc(moveRef(state.code, uid)));
 
@@ -1565,10 +1692,14 @@ async function boot() {
   /* ---------------- lobby wiring ---------------- */
   let lobbyWired = false;
   function wireLobby(room) {
-    // host length control
+    // host settings controls (length + bid style)
     if (room.hostUid === state.uid) {
       window.__homeLength = room.settings.length;
-      App.renderLobbyOpts(async (v) => { try { await F.updateDoc(roomRef(state.code), { 'settings.length': v.val }); } catch (e) {} });
+      window.__homeBid = room.settings.bidStyle || 'simultaneous';
+      App.renderLobbyOpts(
+        async (v) => { try { await F.updateDoc(roomRef(state.code), { 'settings.length': v.val }); } catch (e) {} },
+        async (v) => { try { await F.updateDoc(roomRef(state.code), { 'settings.bidStyle': v.val }); } catch (e) {} }
+      );
     }
     if (lobbyWired) return; lobbyWired = true;
     document.getElementById('startBtn').addEventListener('click', () => startGame());
@@ -1582,6 +1713,7 @@ async function boot() {
   /* ---------------- home wiring ---------------- */
   document.getElementById('createBtn').addEventListener('click', async () => {
     window.__homeLength = readHomeLength();
+    window.__homeBid = readHomeBid();
     try { await createRoom(); } catch (e) { App.toast(e.message || 'Could not create table.'); }
   });
   document.getElementById('joinBtn').addEventListener('click', async () => {
@@ -1593,6 +1725,10 @@ async function boot() {
   function readHomeLength() {
     const b = document.querySelector('#homeLength .opt[aria-pressed="true"]');
     return b && b.textContent.indexOf('Full') === 0 ? 'full' : 'quick';
+  }
+  function readHomeBid() {
+    const b = document.querySelector('#homeBid .opt[aria-pressed="true"]');
+    return b && b.textContent.indexOf('turn') >= 0 ? 'sequential' : 'simultaneous';
   }
 
   /* deep-link join via #CODE */
