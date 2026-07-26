@@ -31,30 +31,47 @@ body{background:radial-gradient(120% 78% at 50% 34%,#3A2545 0%,#2A1B33 46%,#170D
 .menuBtn{background:none;border:1px solid var(--line);color:rgba(244,236,216,.72);border-radius:2px;
   font:400 10px/1 var(--num);letter-spacing:.18em;padding:7px 9px;cursor:pointer}
 
-#rail{display:flex;gap:6px;margin:9px 0 4px;flex:none}
-.seat{flex:1;min-width:0;padding:7px 7px 8px;border-radius:3px;border:1px solid var(--line);
-  background:rgba(244,236,216,.03);transition:border-color .25s,background .25s,box-shadow .25s;position:relative}
-.seat.turn{border-color:var(--brass);background:rgba(212,169,60,.10);box-shadow:0 0 0 1px rgba(212,169,60,.25)}
-.seat.me .who{text-decoration:underline;text-underline-offset:2px}
-.seat.off{opacity:.5}
-.seat .who{font-size:13px;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-  font-variant:small-caps;letter-spacing:.05em}
-.seat .tot{font:400 10px/1 var(--num);color:rgba(244,236,216,.5);margin-top:2px}
-.pips{display:flex;flex-wrap:wrap;gap:3px;margin-top:6px;min-height:8px}
-.pip{width:7px;height:7px;border-radius:50%;border:1px solid rgba(244,236,216,.42)}
-.pip.won{background:var(--parch);border-color:var(--parch)}
-.pip.over{background:var(--crimson);border-color:var(--crimson)}
-.seat.exact .pip.won{background:var(--brass);border-color:var(--brass)}
-.seat.exact .who{color:var(--brass)}
-.seat.bust .who{color:var(--crimson)}
-.bidmark{position:absolute;top:5px;right:7px;font:400 15px/1 var(--num);color:var(--brass);display:flex;align-items:baseline;gap:3px}
-.bidmark span{font-size:8px;letter-spacing:.14em;text-transform:uppercase;color:rgba(212,169,60,.7)}
-.bidmark.pend{color:rgba(244,236,216,.3);font-size:13px}
-.bidmark.lock{color:var(--teal);font-size:14px}
-.dealerdot{position:absolute;bottom:6px;right:7px;font:400 8px/1 var(--num);letter-spacing:.1em;color:rgba(244,236,216,.45)}
-.waitdot{position:absolute;top:7px;right:8px;width:6px;height:6px;border-radius:50%;background:var(--brass);
-  animation:blink 1s steps(2) infinite}
+#rail{display:flex;gap:5px;margin:9px 0 4px;flex:none}
+.seat{flex:1;min-width:0;position:relative;padding:7px 5px 6px;border-radius:6px;border:1px solid var(--line);
+  background:rgba(244,236,216,.03);display:flex;flex-direction:column;align-items:center;gap:2px;
+  transition:border-color .3s,background .3s,box-shadow .3s;overflow:hidden}
+.seat.turn{border-color:var(--brass);background:rgba(212,169,60,.12);box-shadow:0 0 0 1px rgba(212,169,60,.3),0 4px 16px rgba(212,169,60,.12)}
+.seat.off{opacity:.45}
+.s-head{display:flex;align-items:baseline;justify-content:space-between;width:100%;gap:3px}
+.s-name{font-variant:small-caps;letter-spacing:.04em;font-size:12px;line-height:1;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;color:rgba(244,236,216,.9)}
+.seat.me .s-name{color:var(--brass)}
+.s-score{font:400 10px/1 var(--num);color:rgba(244,236,216,.5);flex:none;font-variant-numeric:tabular-nums}
+.s-stand{display:flex;align-items:baseline;justify-content:center;min-height:30px;line-height:1;margin-top:1px}
+.s-taken{font-family:var(--serif);font-size:29px;color:var(--parch);font-variant-numeric:tabular-nums}
+.s-bid{font-family:var(--serif);font-size:16px;color:rgba(244,236,216,.5);margin-left:1px}
+.s-status{font:400 8px/1 var(--num);letter-spacing:.14em;text-transform:uppercase;
+  color:rgba(244,236,216,.4);min-height:9px;text-align:center;white-space:nowrap}
+.s-blindbid{font-family:var(--serif);font-variant:small-caps;font-size:17px;letter-spacing:.02em;color:var(--brass)}
+.s-lock{font-size:19px;color:var(--teal);line-height:1}
+.s-wait{font-size:22px;color:rgba(244,236,216,.28);line-height:.7}
+.s-dchip{flex:none;font:400 7px/1 var(--num);letter-spacing:.08em;color:rgba(244,236,216,.5);
+  border:1px solid var(--line);border-radius:2px;padding:2px 3px;align-self:center}
+/* per-standing colouring */
+.seat.exact{border-color:rgba(212,169,60,.55);background:rgba(212,169,60,.10)}
+.seat.exact .s-taken{color:var(--brass)} .seat.exact .s-status{color:var(--brass)}
+.seat.over{border-color:rgba(179,38,47,.55);background:rgba(179,38,47,.10)}
+.seat.over .s-taken{color:#E4646C} .seat.over .s-status{color:#E4646C}
+.seat.under .s-status{color:rgba(244,236,216,.55)}
+.s-turn{position:absolute;top:0;left:0;right:0;height:2px;background:var(--brass);animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.35}}
 @keyframes blink{50%{opacity:.25}}
+
+/* over/under readout for the round */
+#standing{flex:none;align-self:center;display:flex;flex-direction:column;align-items:center;gap:1px;
+  margin:2px auto 0;padding:5px 15px;border-radius:20px;border:1px solid var(--line);
+  background:rgba(244,236,216,.04);max-width:92%}
+#standing[hidden]{display:none}
+#standing .b-main{font-variant:small-caps;letter-spacing:.05em;font-size:15px;line-height:1.05}
+#standing .b-sub{font:400 8.5px/1 var(--num);letter-spacing:.1em;text-transform:uppercase;color:rgba(244,236,216,.45)}
+#standing.over{border-color:rgba(179,38,47,.5);background:rgba(179,38,47,.10)} #standing.over .b-main{color:#E4646C}
+#standing.under{border-color:rgba(46,143,125,.5);background:rgba(46,143,125,.12)} #standing.under .b-main{color:#5FBFA8}
+#standing.flat{border-color:rgba(212,169,60,.5);background:rgba(212,169,60,.10)} #standing.flat .b-main{color:var(--brass)}
 
 #table{flex:1;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;min-height:0}
 #trick{display:flex;gap:6px;align-items:flex-end;justify-content:center;flex-wrap:wrap;max-width:100%}
@@ -182,6 +199,7 @@ td.delta{width:52px}
   </header>
 
   <div id="rail"></div>
+  <div id="standing" hidden></div>
 
   <main id="table">
     <div id="trick"></div>
@@ -841,37 +859,59 @@ function backEl() { var d = document.createElement('div'); d.className = 'card b
 function renderRail(v, mySeat, presence, myBid) {
   var el = $('rail'); el.innerHTML = '';
   var blind = (v.phase === 'bidding' && v.bidStyle === 'simultaneous');
+  var revealed = (v.phase === 'playing' || v.phase === 'roundend' || v.phase === 'gameover');
   v.seats.forEach(function (p, i) {
-    var d = document.createElement('div');
-    var bid = v.bids[i], tricks = v.tricksWon[i];
+    var bid = v.bids[i], taken = v.tricksWon[i];
     var off = presence && presence[p.uid] === false;
-    d.className = 'seat' + (i === v.turn && (v.phase === 'bidding' || v.phase === 'playing') && !blind ? ' turn' : '') +
-      (i === mySeat ? ' me' : '') + (off ? ' off' : '') +
-      (bid !== null && tricks === bid ? ' exact' : '') + (bid !== null && tricks > bid ? ' bust' : '');
-    var pips = '';
-    if (bid !== null && !blind) {
-      var won = Math.min(tricks, bid), over = Math.max(0, tricks - bid), empty = Math.max(0, bid - tricks), k;
-      for (k = 0; k < won; k++) pips += '<i class="pip won"></i>';
-      for (k = 0; k < over; k++) pips += '<i class="pip over"></i>';
-      for (k = 0; k < empty; k++) pips += '<i class="pip"></i>';
-    }
-    var badge = '';
-    if (blind) {
-      if (i === mySeat && myBid != null) badge = '<div class="bidmark"><span>bid</span>' + myBid + '</div>';
-      else if (v.bidsIn && v.bidsIn[i]) badge = '<div class="bidmark lock">\u2713</div>';
-      else badge = '<div class="bidmark pend">\u00b7</div>';
-    } else if (bid !== null) {
-      badge = '<div class="bidmark"><span>bid</span>' + bid + '</div>';
+    var isTurn = (v.phase === 'playing' && i === v.turn) || (v.phase === 'bidding' && !blind && i === v.turn);
+
+    var stateCls = '';
+    if (revealed && bid !== null) stateCls = taken > bid ? ' over' : (taken === bid ? ' exact' : ' under');
+
+    var mid, status = '';
+    if (revealed && bid !== null) {
+      mid = '<span class="s-taken">' + taken + '</span><span class="s-bid">/' + bid + '</span>';
+      if (taken > bid) status = 'over ' + (taken - bid);
+      else if (taken === bid) status = (bid === 0 && taken === 0 ? 'clear' : 'on target');
+      else status = 'needs ' + (bid - taken);
     } else if (v.phase === 'bidding') {
-      badge = '<div class="bidmark pend">\u00b7</div>';
+      if (blind) {
+        if (i === mySeat && myBid != null) { mid = '<span class="s-blindbid">bid ' + myBid + '</span>'; status = 'locked'; }
+        else if (v.bidsIn && v.bidsIn[i]) { mid = '<span class="s-lock">\u2713</span>'; status = 'ready'; }
+        else { mid = '<span class="s-wait">\u00b7</span>'; status = 'thinking'; }
+      } else if (bid !== null) {
+        mid = '<span class="s-blindbid">bid ' + bid + '</span>';
+      } else {
+        mid = '<span class="s-wait">\u00b7</span>'; status = (i === v.turn ? 'to bid' : '');
+      }
+    } else {
+      mid = '<span class="s-wait">\u2014</span>';
     }
-    var waiting = (v.phase === 'bidding' || v.phase === 'playing') && i === v.turn && !blind;
-    d.innerHTML = '<div class="who">' + esc(p.name) + (i === mySeat ? ' \u00b7' : '') + '</div>' +
-      '<div class="tot">' + v.scores[i] + '</div><div class="pips">' + pips + '</div>' + badge +
-      (i === v.dealer ? '<div class="dealerdot">DEALS</div>' : '') +
-      (waiting ? '<div class="waitdot"></div>' : '');
+
+    var d = document.createElement('div');
+    d.className = 'seat' + stateCls + (isTurn ? ' turn' : '') + (i === mySeat ? ' me' : '') + (off ? ' off' : '');
+    d.innerHTML =
+      '<div class="s-head"><span class="s-name">' + esc(p.name) + '</span>' +
+      (i === v.dealer ? '<span class="s-dchip">D</span>' : '') +
+      '<span class="s-score">' + v.scores[i] + '</span></div>' +
+      '<div class="s-stand">' + mid + '</div>' +
+      '<div class="s-status">' + status + '</div>' +
+      (isTurn ? '<div class="s-turn"></div>' : '');
     el.appendChild(d);
   });
+}
+function renderBanner(v) {
+  var b = $('standing'); if (!b) return;
+  if (v.phase !== 'playing') { b.hidden = true; return; }
+  var sum = v.bids.reduce(function (a, x) { return a + (x || 0); }, 0);
+  var diff = sum - v.round, left = v.round - v.trickNo;
+  var main, hint, cls;
+  if (diff > 0) { main = 'Overbid by ' + diff; hint = 'someone must fall short'; cls = 'over'; }
+  else if (diff < 0) { main = 'Underbid by ' + (-diff); hint = 'loose tricks to dodge'; cls = 'under'; }
+  else { main = 'Flat round'; hint = 'every bid can land'; cls = 'flat'; }
+  b.className = cls;
+  b.innerHTML = '<span class="b-main">' + main + '</span><span class="b-sub">' + hint + ' \u00b7 ' + left + ' trick' + (left === 1 ? '' : 's') + ' left</span>';
+  b.hidden = false;
 }
 var prevTrickIds = [];
 function renderTrick(v) {
@@ -927,7 +967,9 @@ function layoutHand() {
 }
 window.addEventListener('resize', layoutHand);
 function renderTrump(v) {
-  $('roundLabel').textContent = v.status === 'done' ? 'Wizard' : 'Round ' + v.round + ' / ' + v.maxRounds;
+  var label = v.status === 'done' ? 'Wizard' : 'Round ' + v.round + ' / ' + v.maxRounds;
+  if (v.phase === 'playing') { var left = v.round - v.trickNo; label += ' \u00b7 ' + left + ' left'; }
+  $('roundLabel').textContent = label;
   $('trumpGlyph').innerHTML = v.trump
     ? '<span style="color:' + (SUITS[v.trump].red ? 'var(--crimson)' : 'var(--parch)') + '">' + SUITS[v.trump].g + '</span>'
     : '<span style="font-family:var(--num);font-size:13px;letter-spacing:.1em">NONE</span>';
@@ -1000,7 +1042,7 @@ function showOver(v, iface) {
 var current = { v: null, iface: null };
 function paint(v, iface) {
   current.v = v; current.iface = iface;
-  renderTrump(v); renderRail(v, iface.mySeat, iface.presence, iface.myBid); renderTrick(v);
+  renderTrump(v); renderRail(v, iface.mySeat, iface.presence, iface.myBid); renderBanner(v); renderTrick(v);
   renderHand(v, iface.mySeat, iface.myHand || [], iface.canPlay, iface.onPlay || function () {});
 
   // sheets driven by phase
